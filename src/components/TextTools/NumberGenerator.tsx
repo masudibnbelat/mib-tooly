@@ -1,4 +1,3 @@
-// NumberGenerator.tsx
 "use client";
 
 import { useState, useCallback, useMemo } from "react";
@@ -28,11 +27,11 @@ interface GeneratorState {
   results: string[];
 }
 
-/* ─── Modal Wrapper ─── */
+/* ─── Full-Screen Modal Wrapper ─── */
 export const NumberGeneratorModal = ({ onClose }: { onClose: () => void }) => {
   return (
     <motion.div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 backdrop-blur-sm sm:items-center"
+      className="fixed inset-0 z-50 flex overflow-y-auto bg-black/50 backdrop-blur-sm"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -40,14 +39,14 @@ export const NumberGeneratorModal = ({ onClose }: { onClose: () => void }) => {
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <motion.div
-        className="relative w-full max-w-lg rounded-2xl border border-(--color-active-border) bg-(--color-bg) p-5 shadow-2xl sm:p-6"
-        initial={{ scale: 0.95, opacity: 0, y: 20 }}
-        animate={{ scale: 1, opacity: 1, y: 0 }}
-        exit={{ scale: 0.95, opacity: 0, y: 20 }}
+        className="relative w-full min-h-full bg-(--color-bg) p-5 shadow-2xl sm:p-8"
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 16 }}
         transition={{ duration: 0.15 }}
       >
         {/* Header */}
-        <div className="mb-5 flex items-center justify-between">
+        <div className="mb-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-(--color-active-bg)">
               <Dices className="h-5 w-5 text-(--color-text)" />
@@ -59,7 +58,7 @@ export const NumberGeneratorModal = ({ onClose }: { onClose: () => void }) => {
           <button
             type="button"
             onClick={onClose}
-            className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg transition-colors duration-150 hover:bg-(--color-active-bg)"
+            className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-(--color-active-border) transition-colors duration-150 bg-red-500 text-white"
           >
             <X className="h-5 w-5 text-(--color-gray)" />
           </button>
@@ -77,7 +76,7 @@ const NumberGeneratorContent = () => {
     mode: "single",
     min: "1",
     max: "100",
-    count: "5",
+    count: "10",
     allowDecimal: false,
     decimalPlaces: "2",
     results: [],
@@ -96,50 +95,43 @@ const NumberGeneratorContent = () => {
 
   /* ── Generate ── */
   const generate = useCallback(() => {
-    const min = parseFloat(state.min);
-    const max = parseFloat(state.max);
+    const minVal = parseFloat(state.min);
+    const maxVal = parseFloat(state.max);
     const count =
-      state.mode === "multiple" ? Math.max(1, parseInt(state.count) || 1) : 1;
-    const places = Math.max(
-      0,
-      Math.min(10, parseInt(state.decimalPlaces) || 2),
-    );
+      state.mode === "multiple"
+        ? Math.max(1, Math.min(1000, parseInt(state.count) || 1))
+        : 1;
 
-    if (isNaN(min) || isNaN(max)) {
+    if (isNaN(minVal) || isNaN(maxVal)) {
       setError("Please enter valid min and max numbers.");
       return;
     }
-    if (min > max) {
+    if (minVal > maxVal) {
       setError("Min must be less than or equal to Max.");
-      return;
-    }
-    if (state.mode === "multiple" && count > 1000) {
-      setError("Count must be 1,000 or less.");
       return;
     }
 
     const results: string[] = [];
-    for (let i = 0; i < count; i++) {
-      const raw = Math.random() * (max - min) + min;
-      if (state.allowDecimal) {
-        results.push(raw.toFixed(places));
-      } else {
+
+    if (state.allowDecimal) {
+      const places = Math.max(
+        0,
+        Math.min(10, parseInt(state.decimalPlaces) || 2),
+      );
+      for (let i = 0; i < count; i++) {
+        const num = Math.random() * (maxVal - minVal) + minVal;
+        results.push(num.toFixed(places));
+      }
+    } else {
+      const minInt = Math.ceil(minVal);
+      const maxInt = Math.floor(maxVal);
+      if (minInt > maxInt) {
+        setError("No whole numbers exist in this range.");
+        return;
+      }
+      for (let i = 0; i < count; i++) {
         results.push(
-          String(
-            Math.floor(
-              raw +
-                (max === min
-                  ? 0
-                  : Math.random() < raw - Math.floor(raw)
-                    ? 0
-                    : 0),
-            ),
-          ),
-        );
-        // Correct integer random: inclusive both ends
-        results[i] = String(
-          Math.floor(Math.random() * (Math.floor(max) - Math.ceil(min) + 1)) +
-            Math.ceil(min),
+          String(Math.floor(Math.random() * (maxInt - minInt + 1)) + minInt),
         );
       }
     }
@@ -174,7 +166,7 @@ const NumberGeneratorContent = () => {
   }, [state.min, state.max]);
 
   return (
-    <div className="space-y-4">
+    <div className="mx-auto max-w-lg space-y-4">
       {/* ── Mode Toggle ── */}
       <div className="flex gap-2">
         {(["single", "multiple"] as Mode[]).map((m) => (
@@ -244,7 +236,7 @@ const NumberGeneratorContent = () => {
             value={state.count}
             onChange={(e) => update("count", e.target.value)}
             className="w-full rounded-xl border border-(--color-active-border) bg-(--color-bg) px-4 py-2.5 text-sm text-(--color-text) outline-none transition-colors focus:border-(--color-text)/30 placeholder:text-(--color-gray)"
-            placeholder="5"
+            placeholder="10"
           />
         </motion.div>
       )}
@@ -350,26 +342,19 @@ const NumberGeneratorContent = () => {
 
           {/* Single result - big display */}
           {state.mode === "single" && (
-            <div className="flex items-center justify-center rounded-xl border border-(--color-active-border) bg-(--color-active-bg) py-8">
-              <span className="text-4xl font-bold tracking-tight text-(--color-text) sm:text-5xl">
+            <div className="flex items-center justify-center rounded-xl border border-(--color-active-border) bg-(--color-active-bg) py-10">
+              <span className="text-5xl font-bold tracking-tight text-(--color-text) sm:text-6xl">
                 {state.results[0]}
               </span>
             </div>
           )}
 
-          {/* Multiple results - grid */}
+          {/* Multiple results - comma separated */}
           {state.mode === "multiple" && (
-            <div className="max-h-52 overflow-y-auto rounded-xl border border-(--color-active-border)">
-              <div className="grid grid-cols-3 gap-px bg-(--color-active-border) sm:grid-cols-4">
-                {state.results.map((num, i) => (
-                  <div
-                    key={`${i}-${num}`}
-                    className="flex items-center justify-center bg-(--color-bg) px-2 py-2.5 text-sm font-medium tabular-nums text-(--color-text)"
-                  >
-                    {num}
-                  </div>
-                ))}
-              </div>
+            <div className="max-h-60 overflow-y-auto rounded-xl border border-(--color-active-border) bg-(--color-active-bg) p-4">
+              <p className="text-sm leading-relaxed text-(--color-text) wrap-break-word">
+                {state.results.join(", ")}
+              </p>
             </div>
           )}
 
