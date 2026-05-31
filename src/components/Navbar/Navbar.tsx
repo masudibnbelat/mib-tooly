@@ -43,7 +43,7 @@ const Navbar = () => {
           className="flex items-center gap-2 text-xl font-bold text-(--color-text)"
         >
           <Settings className="h-6 w-6" />
-          <span>MiB Tools</span>
+          <span>MiB Tooly</span>
         </Link>
 
         {/* Desktop Menu with Animated Background */}
