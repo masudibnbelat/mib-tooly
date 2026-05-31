@@ -7,7 +7,6 @@ import {
   useRef,
   useState,
   type ChangeEvent,
-  type ComponentPropsWithoutRef,
   type DragEvent,
   type ReactNode,
 } from "react";
@@ -28,6 +27,7 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
+import { type HTMLMotionProps } from "motion/react";
 
 type MimeType = "image/jpeg" | "image/png" | "image/webp";
 type FitMode = "contain" | "cover" | "stretch";
@@ -123,10 +123,11 @@ const ActionButton = ({
   className,
   children,
   ...props
-}: ComponentPropsWithoutRef<"button"> & {
+}: Omit<HTMLMotionProps<"button">, "ref" | "children"> & {
   icon?: LucideIcon;
   active?: boolean;
   full?: boolean;
+  children?: ReactNode;
 }) => {
   return (
     <motion.button

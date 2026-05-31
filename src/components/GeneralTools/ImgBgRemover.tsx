@@ -172,7 +172,7 @@ const ImgBgRemover = ({ onClose }: ImgBgRemoverProps) => {
         setProgressSafe(PHASE.LOAD.end, "AI engine ready");
 
         const blob = await removeBackground(file, {
-          model: "medium",
+          model: "isnet",
           output: { format: "image/png", quality: 1 },
           progress: (key: string, current: number, total: number) => {
             const phase = getPhaseFromKey(key);
