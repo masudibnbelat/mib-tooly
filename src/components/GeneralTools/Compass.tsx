@@ -1,147 +1,151 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
-import {
-  Compass as CompassIcon,
-  ShieldAlert,
-  Smartphone,
-  X,
-} from "lucide-react";
+import { Compass as CompassIcon, X } from "lucide-react";
 
 interface CompassModalProps {
   onClose: () => void;
 }
 
-type SensorState = "starting" | "granted" | "denied" | "unsupported" | "error";
-
 type IOSOrientationEvent = DeviceOrientationEvent & {
   webkitCompassHeading?: number;
 };
 
-type PermissionDeviceOrientationEvent = typeof DeviceOrientationEvent & {
+type PermissionOE = typeof DeviceOrientationEvent & {
   requestPermission?: () => Promise<"granted" | "denied">;
 };
 
 const DIRS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
-const getDir = (deg: number) => DIRS[Math.round(deg / 45) % 8];
-
-const TICK_COUNT = 72;
-const ticks = Array.from({ length: TICK_COUNT }, (_, i) => ({
+const TICKS = Array.from({ length: 72 }, (_, i) => ({
   angle: i * 5,
   major: i % 6 === 0,
 }));
+const DEGREE_MARKS = [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330];
+
+const norm = (d: number) => ((d % 360) + 360) % 360;
+const getDir = (d: number) => DIRS[Math.round(norm(d) / 45) % 8];
+const shortDiff = (from: number, to: number) => {
+  let d = norm(to) - norm(from);
+  if (d > 180) d -= 360;
+  if (d < -180) d += 360;
+  return d;
+};
+
+export const preRequestCompassPermission = async () => {
+  if (typeof window === "undefined" || !("DeviceOrientationEvent" in window))
+    return "unsupported" as const;
+  try {
+    const OE = window.DeviceOrientationEvent as PermissionOE;
+    if (typeof OE.requestPermission === "function")
+      return await OE.requestPermission();
+    return "granted" as const;
+  } catch {
+    return "denied" as const;
+  }
+};
 
 export const CompassModal = ({ onClose }: CompassModalProps) => {
-  const [heading] = useState(0);
-  const [sensorState, setSensorState] = useState<SensorState>("starting");
-  const smoothHeading = useRef(0);
-  const targetHeading = useRef(0);
-  const rafId = useRef<number | null>(null);
-  const needleRef = useRef<HTMLDivElement>(null);
-  const headingRef = useRef<HTMLSpanElement>(null);
+  const [status, setStatus] = useState<"connecting" | "active" | "unavailable">(
+    "connecting",
+  );
+
+  const dialRef = useRef<HTMLDivElement>(null);
+  const degRef = useRef<HTMLSpanElement>(null);
   const dirRef = useRef<HTMLSpanElement>(null);
 
-  // rAF lerp loop — updates DOM directly for perf
-  const tick = useCallback(() => {
-    let diff = targetHeading.current - smoothHeading.current;
-    while (diff > 180) diff -= 360;
-    while (diff < -180) diff += 360;
-    smoothHeading.current += diff * 0.14;
+  const targetH = useRef(0);
+  const smoothH = useRef(0);
+  const raf = useRef<number>(0);
+  const alive = useRef(false);
 
-    const h = ((smoothHeading.current % 360) + 360) % 360;
-    if (needleRef.current)
-      needleRef.current.style.transform = `rotate(${-h}deg)`;
-    if (headingRef.current)
-      headingRef.current.textContent = `${Math.round(targetHeading.current)}°`;
-    if (dirRef.current)
-      dirRef.current.textContent = getDir(targetHeading.current);
+  const render = useCallback(() => {
+    const diff = shortDiff(smoothH.current, targetH.current);
+    smoothH.current = norm(smoothH.current + diff * 0.12);
+
+    if (dialRef.current)
+      dialRef.current.style.transform = `rotate(${-smoothH.current}deg)`;
+
+    const rounded = Math.round(norm(targetH.current));
+    if (degRef.current) degRef.current.textContent = `${rounded}°`;
+    if (dirRef.current) dirRef.current.textContent = getDir(rounded);
 
     // eslint-disable-next-line react-hooks/immutability
-    rafId.current = requestAnimationFrame(tick);
+    raf.current = requestAnimationFrame(render);
   }, []);
 
-  const handleOrientation = useCallback((e: DeviceOrientationEvent) => {
+  const onSensor = useCallback((raw: Event) => {
+    const e = raw as DeviceOrientationEvent;
     const ios = e as IOSOrientationEvent;
+
     let h: number | null = null;
-    if (typeof ios.webkitCompassHeading === "number") {
+    if (typeof ios.webkitCompassHeading === "number")
       h = ios.webkitCompassHeading;
-    } else if (typeof e.alpha === "number") {
-      h = 360 - e.alpha;
+    else if (typeof e.alpha === "number") h = 360 - e.alpha;
+
+    if (h === null || Number.isNaN(h)) return;
+
+    targetH.current = norm(h);
+
+    if (!alive.current) {
+      alive.current = true;
+      setStatus("active");
     }
-    if (h === null || isNaN(h)) return;
-    targetHeading.current = (h + 360) % 360;
-    setSensorState("granted");
   }, []);
 
-  const stopListener = useCallback(() => {
-    window.removeEventListener("deviceorientation", handleOrientation, true);
-  }, [handleOrientation]);
+  const cleanup = useCallback(() => {
+    window.removeEventListener("deviceorientationabsolute", onSensor, true);
+    window.removeEventListener("deviceorientation", onSensor, true);
+  }, [onSensor]);
 
-  const startCompass = useCallback(async () => {
+  const start = useCallback(async () => {
     if (
       typeof window === "undefined" ||
       !("DeviceOrientationEvent" in window)
     ) {
-      setSensorState("unsupported");
+      setStatus("unavailable");
       return;
     }
+
     try {
-      const OE =
-        window.DeviceOrientationEvent as PermissionDeviceOrientationEvent;
+      const OE = window.DeviceOrientationEvent as PermissionOE;
       if (typeof OE.requestPermission === "function") {
-        const perm = await OE.requestPermission();
-        if (perm !== "granted") {
-          setSensorState("denied");
+        const p = await OE.requestPermission();
+        if (p !== "granted") {
+          setStatus("unavailable");
           return;
         }
       }
-      stopListener();
-      window.addEventListener("deviceorientation", handleOrientation, true);
+
+      cleanup();
+      window.addEventListener("deviceorientationabsolute", onSensor, true);
+      window.addEventListener("deviceorientation", onSensor, true);
+
+      setTimeout(() => {
+        if (!alive.current) setStatus("unavailable");
+      }, 3000);
     } catch {
-      setSensorState("error");
+      setStatus("unavailable");
     }
-  }, [handleOrientation, stopListener]);
+  }, [onSensor, cleanup]);
 
   useEffect(() => {
-    rafId.current = requestAnimationFrame(tick);
+    raf.current = requestAnimationFrame(render);
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    void startCompass();
+    void start();
 
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    const prevOverflow = document.body.style.overflow;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const prevOF = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     window.addEventListener("keydown", onKey);
 
     return () => {
-      stopListener();
-      if (rafId.current) cancelAnimationFrame(rafId.current);
+      cleanup();
+      cancelAnimationFrame(raf.current);
       window.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prevOverflow;
+      document.body.style.overflow = prevOF;
     };
-  }, [onClose, startCompass, stopListener, tick]);
-
-  const direction = useMemo(() => getDir(heading), [heading]);
-
-  const StatusIcon =
-    sensorState === "unsupported" ||
-    sensorState === "denied" ||
-    sensorState === "error"
-      ? ShieldAlert
-      : Smartphone;
-
-  const statusMsg =
-    sensorState === "starting"
-      ? "Starting compass sensor…"
-      : sensorState === "granted"
-        ? "Compass is active."
-        : sensorState === "denied"
-          ? "Motion permission denied."
-          : sensorState === "unsupported"
-            ? "Compass not supported on this device."
-            : "Could not start compass sensor.";
+  }, [render, start, cleanup, onClose]);
 
   return (
     <motion.div
@@ -151,7 +155,7 @@ export const CompassModal = ({ onClose }: CompassModalProps) => {
       className="fixed inset-0 z-50 flex flex-col bg-(--color-bg)"
     >
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-(--color-active-border) px-4 py-3 sm:px-6 sm:py-4">
+      <div className="flex items-center justify-between border-b border-(--color-active-border) px-4 py-3">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-(--color-active-bg)">
             <CompassIcon className="h-5 w-5 text-(--color-text)" />
@@ -160,55 +164,70 @@ export const CompassModal = ({ onClose }: CompassModalProps) => {
             <h2 className="text-lg font-semibold text-(--color-text)">
               Compass
             </h2>
-            <p className="hidden text-xs text-(--color-gray) sm:block">
-              Real-time device orientation sensor
+            <p className="text-xs text-(--color-gray)">
+              {status === "active"
+                ? "Live sensor active"
+                : status === "connecting"
+                  ? "Connecting to sensor…"
+                  : "Sensor unavailable"}
             </p>
           </div>
         </div>
         <button
           type="button"
           onClick={onClose}
-          className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-(--color-active-border) bg-red-500 text-(--color-text) transition hover:opacity-90"
-          aria-label="Close compass"
+          className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full bg-red-500 text-white transition hover:opacity-90"
         >
           <X className="h-5 w-5" />
         </button>
       </div>
 
-      {/* Content */}
-      <div className="flex flex-1 flex-col items-center overflow-y-auto px-4 py-5 sm:px-6">
-        {/* Stat cards */}
-        <div className="grid w-full max-w-sm grid-cols-2 gap-3">
-          <div className="rounded-2xl border border-(--color-active-border) bg-(--color-active-bg) p-4">
-            <p className="text-xs text-(--color-gray)">Heading</p>
-            <p className="mt-1 text-2xl font-semibold text-(--color-text)">
-              <span ref={headingRef}>0°</span>
-            </p>
-          </div>
-          <div className="rounded-2xl border border-(--color-active-border) bg-(--color-active-bg) p-4">
-            <p className="text-xs text-(--color-gray)">Direction</p>
-            <p className="mt-1 text-2xl font-semibold text-(--color-text)">
-              <span ref={dirRef}>{direction}</span>
-            </p>
-          </div>
+      {/* Body */}
+      <div className="flex flex-1 flex-col items-center justify-center gap-6 overflow-y-auto px-4 py-6">
+        {/* Status dot */}
+        <div className="flex items-center gap-2">
+          <span
+            className={`inline-block h-2.5 w-2.5 rounded-full ${
+              status === "active"
+                ? "bg-green-500 shadow-lg shadow-green-500/40"
+                : status === "connecting"
+                  ? "animate-pulse bg-yellow-500"
+                  : "bg-red-500"
+            }`}
+          />
+          <span className="text-sm text-(--color-gray)">
+            {status === "active"
+              ? "Receiving heading data"
+              : status === "connecting"
+                ? "Waiting for sensor…"
+                : "No compass sensor detected"}
+          </span>
         </div>
 
-        {/* Compass dial */}
-        <div className="mt-6 flex w-full max-w-sm flex-1 items-center justify-center">
-          <div className="relative aspect-square w-full max-w-75 sm:max-w-85">
-            {/* Outer ring */}
-            <div className="absolute inset-0 rounded-full border-4 border-(--color-active-border) bg-(--color-active-bg)" />
-            {/* Inner ring */}
-            <div className="absolute inset-3.5 rounded-full border border-(--color-active-border)" />
+        {/* Compass */}
+        <div className="relative aspect-square w-full max-w-72 sm:max-w-80">
+          {/* Outer bezel */}
+          <div className="absolute inset-0 rounded-full border-4 border-(--color-active-border) bg-(--color-active-bg)" />
 
-            {/* Ticks — positioned with CSS rotation, no JS layout calc needed */}
-            {ticks.map(({ angle, major }) => (
+          {/* Fixed north marker at top */}
+          <div className="absolute left-1/2 top-1 z-30 -translate-x-1/2">
+            <div className="h-4 w-4 rotate-45 rounded-sm bg-red-500 shadow-lg shadow-red-500/40" />
+          </div>
+
+          {/* Rotating dial */}
+          <div
+            ref={dialRef}
+            className="absolute inset-3 rounded-full will-change-transform"
+          >
+            <div className="absolute inset-0 rounded-full border border-(--color-active-border)" />
+
+            {/* Tick marks */}
+            {TICKS.map(({ angle, major }) => (
               <div
                 key={angle}
-                aria-hidden="true"
-                className="absolute left-1/2 top-[8%] origin-[50%_100%] -translate-x-1/2"
+                className="absolute left-1/2 top-[6%] -translate-x-1/2"
                 style={{
-                  height: "42%",
+                  height: "44%",
                   width: major ? 2 : 1,
                   transform: `translateX(-50%) rotate(${angle}deg)`,
                   transformOrigin: "50% 100%",
@@ -217,58 +236,95 @@ export const CompassModal = ({ onClose }: CompassModalProps) => {
                 <div
                   className={`mx-auto rounded-full ${
                     major
-                      ? "h-3 bg-(--color-text) opacity-80"
-                      : "h-1.25 bg-(--color-gray) opacity-40"
+                      ? "h-3.5 bg-(--color-text) opacity-70"
+                      : "h-1.5 bg-(--color-gray) opacity-30"
                   }`}
                   style={{ width: major ? 2 : 1 }}
                 />
               </div>
             ))}
 
-            {/* Cardinal labels */}
-            <span className="absolute left-1/2 top-2.5 -translate-x-1/2 text-sm font-bold text-red-500">
-              N
-            </span>
-            <span className="absolute bottom-2.5 left-1/2 -translate-x-1/2 text-xs font-medium text-(--color-text)">
-              S
-            </span>
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-(--color-text)">
-              E
-            </span>
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-medium text-(--color-text)">
-              W
-            </span>
+            {/* Degree labels around dial */}
+            {DEGREE_MARKS.map((deg) => {
+              const r = 37;
+              const rad = ((deg - 90) * Math.PI) / 180;
+              const x = 50 + r * Math.cos(rad);
+              const y = 50 + r * Math.sin(rad);
 
-            {/* Needle */}
-            <div
-              ref={needleRef}
-              className="absolute inset-0 rounded-full will-change-transform"
-            >
-              {/* North — red */}
-              <div className="absolute left-1/2 top-[17%] h-[32%] w-0.75 -translate-x-1/2 rounded-full bg-red-500 shadow-[0_0_12px_rgba(239,68,68,0.4)]" />
-              {/* South — muted */}
-              <div className="absolute bottom-[17%] left-1/2 h-[32%] w-0.75 -translate-x-1/2 rounded-full bg-(--color-gray)" />
+              const isN = deg === 0;
+              const isCardinal = [0, 90, 180, 270].includes(deg);
+              const label = isN
+                ? "N"
+                : deg === 90
+                  ? "E"
+                  : deg === 180
+                    ? "S"
+                    : deg === 270
+                      ? "W"
+                      : `${deg}`;
+
+              return (
+                <span
+                  key={deg}
+                  className={`absolute -translate-x-1/2 -translate-y-1/2 ${
+                    isN
+                      ? "text-sm font-bold text-red-500"
+                      : isCardinal
+                        ? "text-xs font-semibold text-(--color-text)"
+                        : "text-[10px] text-(--color-gray)"
+                  }`}
+                  style={{ left: `${x}%`, top: `${y}%` }}
+                >
+                  {label}
+                </span>
+              );
+            })}
+
+            {/* Inner ring */}
+            <div className="absolute inset-[24%] rounded-full border border-(--color-active-border) opacity-50" />
+          </div>
+
+          {/* Fixed needle — always points up */}
+          <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+            <div className="relative h-[52%] w-1">
+              <div className="absolute left-1/2 top-0 h-1/2 w-1 -translate-x-1/2 rounded-full bg-red-500 shadow-lg shadow-red-500/30" />
+              <div className="absolute bottom-0 left-1/2 h-1/2 w-1 -translate-x-1/2 rounded-full bg-(--color-gray) opacity-50" />
             </div>
+          </div>
 
-            {/* Center pivot */}
-            <div className="absolute left-1/2 top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-(--color-bg) bg-(--color-text)" />
+          {/* Center dot */}
+          <div className="absolute left-1/2 top-1/2 z-30 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-4 border-(--color-bg) bg-(--color-text)" />
+        </div>
+
+        {/* Heading + Direction */}
+        <div className="grid w-full max-w-72 grid-cols-2 gap-3 sm:max-w-80">
+          <div className="rounded-2xl border border-(--color-active-border) bg-(--color-active-bg) p-4 text-center">
+            <p className="text-xs text-(--color-gray)">Heading</p>
+            <p className="mt-1 text-3xl font-bold tabular-nums text-(--color-text)">
+              <span ref={degRef}>0°</span>
+            </p>
+          </div>
+          <div className="rounded-2xl border border-(--color-active-border) bg-(--color-active-bg) p-4 text-center">
+            <p className="text-xs text-(--color-gray)">Direction</p>
+            <p className="mt-1 text-3xl font-bold text-(--color-text)">
+              <span ref={dirRef}>N</span>
+            </p>
           </div>
         </div>
 
-        {/* Status */}
-        <div className="mt-6 w-full max-w-sm">
-          <div className="rounded-2xl border border-(--color-active-border) bg-(--color-active-bg) p-3 sm:p-4">
-            <div className="flex items-start gap-3">
-              <StatusIcon className="mt-0.5 h-5 w-5 shrink-0 text-(--color-text)" />
-              <div className="min-w-0 flex-1">
-                <p className="text-sm text-(--color-text)">{statusMsg}</p>
-                <p className="mt-1 text-xs text-(--color-gray)">
-                  Best on mobile + HTTPS. Hold phone flat for accuracy.
-                </p>
-              </div>
-            </div>
+        {/* Help text for unavailable */}
+        {status === "unavailable" && (
+          <div className="w-full max-w-72 rounded-2xl border border-red-500/20 bg-red-500/5 p-4 sm:max-w-80">
+            <p className="text-sm font-medium text-red-400">
+              No compass sensor found
+            </p>
+            <p className="mt-2 text-xs leading-relaxed text-(--color-gray)">
+              Compass needs a magnetometer sensor which is only available on
+              mobile phones. To test on desktop, open Chrome DevTools → More
+              Tools → Sensors → change Alpha value.
+            </p>
           </div>
-        </div>
+        )}
       </div>
     </motion.div>
   );

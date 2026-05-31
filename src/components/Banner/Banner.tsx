@@ -40,7 +40,7 @@ export default function Banner() {
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Link
-                href="/tools"
+                href="/"
                 className="inline-flex items-center justify-center gap-2 rounded-2xl bg-(--color-text) px-6 py-3.5 text-sm font-semibold text-(--color-bg)"
               >
                 Explore Tools

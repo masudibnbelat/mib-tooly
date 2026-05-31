@@ -4,6 +4,7 @@ import { useState } from "react";
 import { AnimatePresence } from "motion/react";
 import {
   Clock,
+  ImageUp,
   Navigation,
   QrCode,
   Timer,
@@ -13,8 +14,9 @@ import {
 import { CountDownModal } from "./CountDown";
 import { StopWatchModal } from "./StopWatch";
 import MorseCodeModal from "./MorseCode";
-import { CompassModal } from "./Compass";
+import { CompassModal, preRequestCompassPermission } from "./Compass";
 import QRCodeScanner from "./QRCodeScanner";
+import ImageResizer from "./ImageResizer";
 
 interface Tool {
   id: string;
@@ -60,11 +62,25 @@ const TOOLS: Tool[] = [
     icon: QrCode,
     modal: (onClose) => <QRCodeScanner onClose={onClose} />,
   },
+  {
+    id: "imageresizer",
+    label: "Image Resizer",
+    description: "Image resize ও export করুন",
+    icon: ImageUp,
+    modal: (onClose) => <ImageResizer onClose={onClose} />,
+  },
 ];
 
 const GeneralTools = () => {
   const [active, setActive] = useState<string | null>(null);
   const activeTool = TOOLS.find((t) => t.id === active);
+
+  const handleToolClick = async (id: string) => {
+    if (id === "compass") {
+      await preRequestCompassPermission();
+    }
+    setActive(id);
+  };
 
   return (
     <main>
@@ -78,7 +94,7 @@ const GeneralTools = () => {
             <button
               type="button"
               key={id}
-              onClick={() => setActive(id)}
+              onClick={() => void handleToolClick(id)}
               className="
                 group touch-manipulation cursor-pointer rounded-xl
                 border border-(--color-active-border)
@@ -92,10 +108,10 @@ const GeneralTools = () => {
               <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-(--color-active-bg) group-hover:bg-(--color-bg)">
                 <Icon className="h-5 w-5 text-(--color-text)" />
               </div>
-              <h3 className="text-sm font-medium text-(--color-text) leading-tight">
+              <h3 className="text-sm leading-tight font-medium text-(--color-text)">
                 {label}
               </h3>
-              <p className="mt-1 text-xs text-(--color-gray) leading-relaxed">
+              <p className="mt-1 text-xs leading-relaxed text-(--color-gray)">
                 {description}
               </p>
             </button>
