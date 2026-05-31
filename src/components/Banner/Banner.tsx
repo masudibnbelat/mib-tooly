@@ -86,7 +86,7 @@ export default function Banner() {
           </div>
 
           {/* right */}
-          <div className="relative mx-auto w-full max-w-[520px]">
+          <div className="relative mx-auto w-full max-w-130">
             <div className="absolute left-2 top-12 h-24 w-24 rounded-[28px] border border-(--color-active-border)" />
             <div className="absolute right-2 top-2 h-20 w-20 rounded-full bg-(--color-active-bg)" />
             <div className="absolute bottom-10 left-8 h-16 w-16 rounded-full border border-(--color-active-border)" />
@@ -132,7 +132,7 @@ export default function Banner() {
               </div>
 
               {/* main card */}
-              <div className="absolute inset-x-8 bottom-0 rounded-[32px] border border-(--color-active-border) bg-(--color-bg) p-5 shadow-xl">
+              <div className="absolute inset-x-8 bottom-0 rounded-4xl border border-(--color-active-border) bg-(--color-bg) p-5 shadow-xl">
                 <div className="flex items-center justify-between">
                   <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-(--color-text) text-(--color-bg)">
                     <Wrench className="h-4 w-4" />
