@@ -7,6 +7,7 @@ import {
   ImageUp,
   Navigation,
   QrCode,
+  Scissors,
   Timer,
   Zap,
   type LucideIcon,
@@ -17,6 +18,7 @@ import MorseCodeModal from "./MorseCode";
 import { CompassModal, preRequestCompassPermission } from "./Compass";
 import QRCodeScanner from "./QRCodeScanner";
 import ImageResizer from "./ImageResizer";
+import ImgBgRemover from "./ImgBgRemover";
 
 interface Tool {
   id: string;
@@ -68,6 +70,13 @@ const TOOLS: Tool[] = [
     description: "Image resize ও export করুন",
     icon: ImageUp,
     modal: (onClose) => <ImageResizer onClose={onClose} />,
+  },
+  {
+    id: "bgremover",
+    label: "BG Remover",
+    description: "Image background remove ও color replace করুন",
+    icon: Scissors,
+    modal: (onClose) => <ImgBgRemover onClose={onClose} />,
   },
 ];
 
