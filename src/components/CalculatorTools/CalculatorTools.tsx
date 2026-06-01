@@ -2,8 +2,13 @@
 
 import { type ReactNode, useState } from "react";
 import { AnimatePresence } from "motion/react";
-import { Calculator as CalculatorIcon, type LucideIcon } from "lucide-react";
+import {
+  Calculator as CalculatorIcon,
+  Hash,
+  type LucideIcon,
+} from "lucide-react";
 import CalculatorModal from "./Calculator";
+import BaseConverterModal from "./BaseConverter";
 
 interface Tool {
   id: string;
@@ -20,6 +25,13 @@ const TOOLS: Tool[] = [
     description: "Simple calculator for basic arithmetic operations",
     icon: CalculatorIcon,
     modal: (onClose) => <CalculatorModal onClose={onClose} />,
+  },
+  {
+    id: "base-converter",
+    label: "Base Converter",
+    description: "Convert between binary, decimal, hex, octal & more",
+    icon: Hash,
+    modal: (onClose) => <BaseConverterModal onClose={onClose} />,
   },
 ];
 

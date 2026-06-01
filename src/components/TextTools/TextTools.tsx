@@ -13,6 +13,7 @@ import {
   FileX2,
   QrCode,
   Dices,
+  Lock,
 } from "lucide-react";
 import { TextCounterModal } from "./TextCounter";
 import { TextRepeaterModal } from "./TextRepeater";
@@ -23,6 +24,7 @@ import { RemoveDuplicateLinesModal } from "./RemoveDuplicateLines";
 import { RemoveDuplicateWordsModal } from "./RemoveDuplicateWords";
 import { TextToQRModal } from "./TextToQrModal";
 import { NumberGeneratorModal } from "./NumberGenerator";
+import Encryptor from "./Encryptor";
 
 interface Tool {
   id: string;
@@ -85,6 +87,12 @@ const TOOLS: Tool[] = [
     label: "Number Generator",
     icon: Dices,
     modal: (onClose) => <NumberGeneratorModal onClose={onClose} />,
+  },
+  {
+    id: "encryptor",
+    label: "Encryptor",
+    icon: Lock,
+    modal: (onClose) => <Encryptor onClose={onClose} />,
   },
 ];
 
