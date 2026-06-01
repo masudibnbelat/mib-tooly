@@ -25,7 +25,7 @@ import {
 
 async function deriveKey(
   password: string,
-  salt: Uint8Array,
+  salt: Uint8Array<ArrayBuffer>,
 ): Promise<CryptoKey> {
   const enc = new TextEncoder();
   const keyMaterial = await crypto.subtle.importKey(
@@ -44,13 +44,23 @@ async function deriveKey(
   );
 }
 
+function toFixedBuffer(u8: Uint8Array): Uint8Array<ArrayBuffer> {
+  return new Uint8Array(
+    u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength),
+  ) as Uint8Array<ArrayBuffer>;
+}
+
 async function encryptText(
   plaintext: string,
   password: string,
 ): Promise<string> {
   const enc = new TextEncoder();
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const salt = crypto.getRandomValues(
+    new Uint8Array(16),
+  ) as Uint8Array<ArrayBuffer>;
+  const iv = crypto.getRandomValues(
+    new Uint8Array(12),
+  ) as Uint8Array<ArrayBuffer>;
   const key = await deriveKey(password, salt);
   const cipherBuffer = await crypto.subtle.encrypt(
     { name: "AES-GCM", iv },
@@ -66,10 +76,10 @@ async function encryptText(
 }
 
 async function decryptText(encoded: string, password: string): Promise<string> {
-  const data = Uint8Array.from(atob(encoded), (c) => c.charCodeAt(0));
-  const salt = data.slice(0, 16);
-  const iv = data.slice(16, 28);
-  const cipher = data.slice(28);
+  const raw = Uint8Array.from(atob(encoded), (c) => c.charCodeAt(0));
+  const salt = toFixedBuffer(raw.slice(0, 16));
+  const iv = toFixedBuffer(raw.slice(16, 28));
+  const cipher = toFixedBuffer(raw.slice(28));
   const key = await deriveKey(password, salt);
   const plainBuffer = await crypto.subtle.decrypt(
     { name: "AES-GCM", iv },
@@ -82,9 +92,13 @@ async function decryptText(encoded: string, password: string): Promise<string> {
 async function encryptFile(
   file: File,
   password: string,
-): Promise<{ encrypted: Uint8Array; fileName: string }> {
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  const iv = crypto.getRandomValues(new Uint8Array(12));
+): Promise<{ encrypted: Uint8Array<ArrayBuffer>; fileName: string }> {
+  const salt = crypto.getRandomValues(
+    new Uint8Array(16),
+  ) as Uint8Array<ArrayBuffer>;
+  const iv = crypto.getRandomValues(
+    new Uint8Array(12),
+  ) as Uint8Array<ArrayBuffer>;
   const key = await deriveKey(password, salt);
   const fileBuffer = await file.arrayBuffer();
   const enc = new TextEncoder();
@@ -100,7 +114,7 @@ async function encryptFile(
   const cipherBuffer = await crypto.subtle.encrypt(
     { name: "AES-GCM", iv },
     key,
-    payload,
+    toFixedBuffer(payload),
   );
   const cipher = new Uint8Array(cipherBuffer);
   const combined = new Uint8Array(salt.length + iv.length + cipher.length);
@@ -113,11 +127,11 @@ async function encryptFile(
 async function decryptFile(
   file: File,
   password: string,
-): Promise<{ decrypted: Uint8Array; fileName: string }> {
-  const data = new Uint8Array(await file.arrayBuffer());
-  const salt = data.slice(0, 16);
-  const iv = data.slice(16, 28);
-  const cipher = data.slice(28);
+): Promise<{ decrypted: Uint8Array<ArrayBuffer>; fileName: string }> {
+  const raw = new Uint8Array(await file.arrayBuffer());
+  const salt = toFixedBuffer(raw.slice(0, 16));
+  const iv = toFixedBuffer(raw.slice(16, 28));
+  const cipher = toFixedBuffer(raw.slice(28));
   const key = await deriveKey(password, salt);
   const plainBuffer = await crypto.subtle.decrypt(
     { name: "AES-GCM", iv },
@@ -132,7 +146,7 @@ async function decryptFile(
   return { decrypted: fileData, fileName };
 }
 
-function downloadBlob(data: Uint8Array, fileName: string) {
+function downloadBlob(data: Uint8Array<ArrayBuffer>, fileName: string) {
   const blob = new Blob([data]);
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -146,15 +160,15 @@ function downloadBlob(data: Uint8Array, fileName: string) {
   }, 100);
 }
 
-// ─── Tab type ───────────────────────────────────────────────────────
+// ─── Types ──────────────────────────────────────────────────────────
 
 type TabId = "text" | "file";
-
-// ─── Exported Component (receives onClose from parent) ──────────────
 
 interface EncryptorProps {
   onClose: () => void;
 }
+
+// ─── Main Component ─────────────────────────────────────────────────
 
 const Encryptor = ({ onClose }: EncryptorProps) => {
   const [activeTab, setActiveTab] = useState<TabId>("text");
@@ -204,10 +218,11 @@ const Encryptor = ({ onClose }: EncryptorProps) => {
             Encryptor / Decryptor
           </h2>
         </div>
+
         <motion.button
           type="button"
           onClick={onClose}
-          className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg bg-red-500 text-white transition-colors hover:bg-red-600 active:scale-95"
+          className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg bg-red-500 text-white transition-colors hover:bg-red-600"
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.9 }}
         >
@@ -304,13 +319,11 @@ function TextEncryptPanel() {
     setError("");
     setLoading(true);
     try {
-      if (mode === "encrypt") {
-        const result = await encryptText(input, password);
-        setOutput(result);
-      } else {
-        const result = await decryptText(input.trim(), password);
-        setOutput(result);
-      }
+      const result =
+        mode === "encrypt"
+          ? await encryptText(input, password)
+          : await decryptText(input.trim(), password);
+      setOutput(result);
     } catch {
       setError(
         mode === "decrypt"
@@ -386,10 +399,10 @@ function TextEncryptPanel() {
           type="button"
           onClick={handleSwap}
           disabled={!output}
+          title="Swap output → input & toggle mode"
           className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg border border-(--color-active-border) text-(--color-gray) transition-colors hover:bg-(--color-active-bg) hover:text-(--color-text) disabled:cursor-not-allowed disabled:opacity-30"
           whileHover={{ rotate: 180 }}
           transition={{ duration: 0.3 }}
-          title="Swap output → input & toggle mode"
         >
           <ArrowRightLeft className="h-4 w-4" />
         </motion.button>
@@ -397,9 +410,9 @@ function TextEncryptPanel() {
         <motion.button
           type="button"
           onClick={handleClear}
+          title="Clear all"
           className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg border border-(--color-active-border) text-(--color-gray) transition-colors hover:bg-red-500/10 hover:text-red-500"
           whileTap={{ scale: 0.85 }}
-          title="Clear all"
         >
           <Trash2 className="h-4 w-4" />
         </motion.button>
@@ -485,13 +498,11 @@ function TextEncryptPanel() {
           />
         ) : mode === "encrypt" ? (
           <>
-            <ShieldCheck className="h-4 w-4" />
-            Encrypt
+            <ShieldCheck className="h-4 w-4" /> Encrypt
           </>
         ) : (
           <>
-            <Unlock className="h-4 w-4" />
-            Decrypt
+            <Unlock className="h-4 w-4" /> Decrypt
           </>
         )}
       </motion.button>
@@ -648,9 +659,9 @@ function FileEncryptPanel() {
         <motion.button
           type="button"
           onClick={handleClear}
+          title="Clear all"
           className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg border border-(--color-active-border) text-(--color-gray) transition-colors hover:bg-red-500/10 hover:text-red-500"
           whileTap={{ scale: 0.85 }}
-          title="Clear all"
         >
           <Trash2 className="h-4 w-4" />
         </motion.button>
@@ -765,13 +776,11 @@ function FileEncryptPanel() {
           />
         ) : mode === "encrypt" ? (
           <>
-            <ShieldCheck className="h-4 w-4" />
-            Encrypt & Download
+            <ShieldCheck className="h-4 w-4" /> Encrypt & Download
           </>
         ) : (
           <>
-            <Download className="h-4 w-4" />
-            Decrypt & Download
+            <Download className="h-4 w-4" /> Decrypt & Download
           </>
         )}
       </motion.button>
