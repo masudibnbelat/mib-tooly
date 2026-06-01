@@ -244,7 +244,7 @@ const FlipCoinModal = ({ onClose }: FlipCoinProps) => {
           <button
             type="button"
             onClick={onClose}
-            className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-[var(--color-active-bg)] text-[var(--color-gray)] transition-colors hover:bg-[var(--color-active-border)] hover:text-[var(--color-text)]"
+            className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-red-500 text-[var(--color-text)] transition-colors"
             aria-label="Close"
           >
             <X className="h-4 w-4" />

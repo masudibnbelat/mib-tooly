@@ -3,7 +3,15 @@
 import Link from "next/link";
 import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Menu, X, Home, FileText, Settings, Mail } from "lucide-react";
+import {
+  Menu,
+  X,
+  Home,
+  FileText,
+  Settings,
+  Calculator,
+  Fan,
+} from "lucide-react";
 import { usePathname } from "next/navigation";
 import ThemeToggle from "./ThemeToggle";
 
@@ -21,7 +29,12 @@ const navItems = [
   {
     label: "General Tools",
     href: "/general-tools",
-    icon: Mail,
+    icon: Fan,
+  },
+  {
+    label: "Calculator Tools",
+    href: "/calculator-tools",
+    icon: Calculator,
   },
 ];
 
