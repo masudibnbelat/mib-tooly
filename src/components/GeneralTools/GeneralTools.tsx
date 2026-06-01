@@ -3,7 +3,10 @@
 import { useState } from "react";
 import { AnimatePresence } from "motion/react";
 import {
+  ArrowLeftRight,
   Clock,
+  Coins,
+  CreditCard,
   ImageUp,
   Navigation,
   QrCode,
@@ -19,6 +22,9 @@ import { CompassModal, preRequestCompassPermission } from "./Compass";
 import QRCodeScanner from "./QRCodeScanner";
 import ImageResizer from "./ImageResizer";
 import ImgBgRemover from "./ImgBgRemover";
+import { PassportPhotoMakerModal } from "./PassportPhotoMaker";
+import ImageFormatConverter from "./ImageFormatConverter";
+import FlipCoinModal from "./FlipCoin";
 
 interface Tool {
   id: string;
@@ -77,6 +83,27 @@ const TOOLS: Tool[] = [
     description: "Image background remove ও color replace করুন",
     icon: Scissors,
     modal: (onClose) => <ImgBgRemover onClose={onClose} />,
+  },
+  {
+    id: "passport",
+    label: "Passport Photo",
+    description: "Country-wise passport & stamp size photo maker",
+    icon: CreditCard,
+    modal: (onClose) => <PassportPhotoMakerModal onClose={onClose} />,
+  },
+  {
+    id: "imgconverter",
+    label: "Img Converter",
+    description: "যেকোনো image format এ convert করুন",
+    icon: ArrowLeftRight,
+    modal: (onClose) => <ImageFormatConverter onClose={onClose} />,
+  },
+  {
+    id: "flipcoin",
+    label: "Flip Coin",
+    description: "Realistic animated coin toss",
+    icon: Coins,
+    modal: (onClose) => <FlipCoinModal onClose={onClose} />,
   },
 ];
 
