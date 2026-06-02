@@ -1,304 +1,46 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import SelectOption, { SelectOptionItem } from "../ui/SelectOption";
-
-const EN_MONTHS = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-];
-
-const EN_MONTHS_SHORT = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-];
-
-const EN_DAYS = [
-  "Sunday",
-  "Monday",
-  "Tuesday",
-  "Wednesday",
-  "Thursday",
-  "Friday",
-  "Saturday",
-];
-
-const EN_DAYS_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-const BN_MONTHS = [
-  "Boishakh",
-  "Jyoishtho",
-  "Asharh",
-  "Shrabon",
-  "Bhadro",
-  "Ashwin",
-  "Kartik",
-  "Ogrohayon",
-  "Poush",
-  "Magh",
-  "Falgun",
-  "Choitro",
-];
-
-const BN_MONTHS_SHORT = [
-  "Boi",
-  "Jyo",
-  "Ash",
-  "Shr",
-  "Bha",
-  "Ashw",
-  "Kar",
-  "Ogr",
-  "Pou",
-  "Mag",
-  "Fal",
-  "Cho",
-];
-
-const BN_SEASONS = [
-  "Summer",
-  "Summer",
-  "Monsoon",
-  "Monsoon",
-  "Autumn",
-  "Autumn",
-  "Late Autumn",
-  "Late Autumn",
-  "Winter",
-  "Winter",
-  "Spring",
-  "Spring",
-];
-
-const BN_SEASON_ICONS = [
-  "☀️",
-  "☀️",
-  "🌧️",
-  "🌧️",
-  "🍂",
-  "🍂",
-  "🌾",
-  "🌾",
-  "❄️",
-  "❄️",
-  "🌸",
-  "🌸",
-];
-
-const HIJRI_MONTHS = [
-  "Muharram",
-  "Safar",
-  "Rabi al-Awwal",
-  "Rabi al-Thani",
-  "Jumada al-Ula",
-  "Jumada al-Akhirah",
-  "Rajab",
-  "Shaban",
-  "Ramadan",
-  "Shawwal",
-  "Dhul-Qadah",
-  "Dhul-Hijjah",
-];
-
-const HIJRI_MONTHS_SHORT = [
-  "Muh",
-  "Saf",
-  "Rab-I",
-  "Rab-II",
-  "Jum-I",
-  "Jum-II",
-  "Raj",
-  "Sha",
-  "Ram",
-  "Shaw",
-  "Dhu-Q",
-  "Dhu-H",
-];
-
-const MONTH_OPTIONS: SelectOptionItem[] = EN_MONTHS.map((label, index) => ({
-  label,
-  value: String(index),
-}));
-
-const YEAR_OPTIONS: SelectOptionItem[] = Array.from({ length: 301 }, (_, i) => {
-  const year = 1900 + i;
-  return { label: String(year), value: String(year) };
-});
-
-const hijriFormatter = new Intl.DateTimeFormat("en-u-ca-islamic-umalqura", {
-  day: "numeric",
-  month: "numeric",
-  year: "numeric",
-});
-
-function ordSuffix(d: number) {
-  if (d >= 11 && d <= 13) return "th";
-  return ["th", "st", "nd", "rd"][d % 10] ?? "th";
-}
-
-function sameDate(a: Date, b: Date) {
-  return (
-    a.getDate() === b.getDate() &&
-    a.getMonth() === b.getMonth() &&
-    a.getFullYear() === b.getFullYear()
-  );
-}
-
-function daysInMonth(year: number, month: number) {
-  return new Date(year, month + 1, 0).getDate();
-}
-
-function toInputValue(date: Date) {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-
-function toBanglaDate(date: Date) {
-  const y = date.getFullYear();
-  const m = date.getMonth() + 1;
-  const d = date.getDate();
-
-  const leapEn = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
-  const cutoff = leapEn
-    ? [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-    : [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-
-  let dayOfYear = 0;
-  for (let i = 0; i < m - 1; i++) dayOfYear += cutoff[i];
-  dayOfYear += d;
-
-  const leapBn =
-    ((y + 594) % 4 === 0 && (y + 594) % 100 !== 0) || (y + 594) % 400 === 0;
-
-  const bnStart = 80;
-  let bYear: number;
-  let bMonth = 0;
-  let bDay = 1;
-
-  if (dayOfYear < bnStart) {
-    bYear = y - 1 + 593;
-
-    const prevLeap =
-      ((y + 593) % 4 === 0 && (y + 593) % 100 !== 0) || (y + 593) % 400 === 0;
-
-    const prevYearDays = prevLeap ? 366 : 365;
-    const dFromBnNew = prevYearDays - bnStart + 1 + dayOfYear;
-
-    let acc = 0;
-    for (bMonth = 0; bMonth < 12; bMonth++) {
-      const mdays =
-        bMonth < 5 ? 31 : bMonth === 11 ? 14 + (prevLeap ? 1 : 0) : 30;
-
-      if (dFromBnNew <= acc + mdays) {
-        bDay = dFromBnNew - acc;
-        break;
-      }
-
-      acc += mdays;
-    }
-  } else {
-    bYear = y + 593;
-    const dFromBnNew = dayOfYear - bnStart + 1;
-
-    let acc = 0;
-    for (bMonth = 0; bMonth < 12; bMonth++) {
-      const mdays =
-        bMonth < 5 ? 31 : bMonth === 11 ? 14 + (leapBn ? 1 : 0) : 30;
-
-      if (dFromBnNew <= acc + mdays) {
-        bDay = dFromBnNew - acc;
-        break;
-      }
-
-      acc += mdays;
-    }
-  }
-
-  return { day: bDay, month: bMonth, year: bYear };
-}
-
-function toHijriDate(date: Date) {
-  const parts = hijriFormatter.formatToParts(date);
-
-  const getPart = (type: string) =>
-    parts.find((p) => p.type === type)?.value ?? "";
-
-  return {
-    day: Number(getPart("day")),
-    month: Number(getPart("month")) - 1,
-    year: Number(getPart("year")),
-  };
-}
-
-function formatEnglish(date: Date) {
-  return `${date.getDate()}${ordSuffix(date.getDate())} ${
-    EN_MONTHS[date.getMonth()]
-  } ${date.getFullYear()}`;
-}
-
-function getCalendarCells(year: number, month: number) {
-  const firstDay = new Date(year, month, 1).getDay();
-  const totalDays = daysInMonth(year, month);
-  const prevMonthDays = daysInMonth(year, month - 1);
-
-  const cells: { date: Date; inMonth: boolean }[] = [];
-
-  for (let i = firstDay - 1; i >= 0; i--) {
-    cells.push({
-      date: new Date(year, month - 1, prevMonthDays - i),
-      inMonth: false,
-    });
-  }
-
-  for (let i = 1; i <= totalDays; i++) {
-    cells.push({
-      date: new Date(year, month, i),
-      inMonth: true,
-    });
-  }
-
-  while (cells.length < 42) {
-    const nextDay = cells.length - (firstDay + totalDays) + 1;
-    cells.push({
-      date: new Date(year, month + 1, nextDay),
-      inMonth: false,
-    });
-  }
-
-  return cells;
-}
+import { motion, AnimatePresence } from "motion/react";
+import { ChevronLeft, ChevronRight, RotateCcw, X } from "lucide-react";
+import DatePicker from "../ui/DatePicker";
+import {
+  BN_MONTHS,
+  BN_SEASON_ICONS,
+  BN_SEASONS,
+  EN_DAYS_SHORT,
+  EN_MONTHS,
+  HIJRI_MONTHS,
+} from "./CalenderData";
+import {
+  getCalendarCells,
+  ordSuffix,
+  sameDate,
+  toBanglaDate,
+  toHijriDate,
+} from "./CalenderHelper";
 
 export default function MultiCalendar() {
   const [now, setNow] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [viewMonth, setViewMonth] = useState(() => new Date().getMonth());
   const [viewYear, setViewYear] = useState(() => new Date().getFullYear());
+  const [slideDir, setSlideDir] = useState(0);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalDate, setModalDate] = useState<Date | null>(null);
 
   useEffect(() => {
-    const timer = window.setInterval(() => setNow(new Date()), 60_000);
-    return () => window.clearInterval(timer);
+    const t = window.setInterval(() => setNow(new Date()), 60_000);
+    return () => window.clearInterval(t);
+  }, []);
+
+  // ✅ Close modal on outside click
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setModalOpen(false);
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
   }, []);
 
   const today = useMemo(() => {
@@ -306,34 +48,6 @@ export default function MultiCalendar() {
     d.setHours(0, 0, 0, 0);
     return d;
   }, [now]);
-
-  const currentTime = useMemo(
-    () =>
-      now.toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-    [now],
-  );
-
-  const todayBn = useMemo(() => toBanglaDate(today), [today]);
-  const todayHijri = useMemo(() => toHijriDate(today), [today]);
-
-  const selectedBn = useMemo(() => toBanglaDate(selectedDate), [selectedDate]);
-  const selectedHijri = useMemo(
-    () => toHijriDate(selectedDate),
-    [selectedDate],
-  );
-
-  const visibleMonthApproxBn = useMemo(
-    () => toBanglaDate(new Date(viewYear, viewMonth, 15)),
-    [viewYear, viewMonth],
-  );
-
-  const visibleMonthApproxHijri = useMemo(
-    () => toHijriDate(new Date(viewYear, viewMonth, 15)),
-    [viewYear, viewMonth],
-  );
 
   const cells = useMemo(
     () =>
@@ -346,6 +60,13 @@ export default function MultiCalendar() {
     [viewYear, viewMonth],
   );
 
+  const changeMonth = (dir: number) => {
+    setSlideDir(dir);
+    const next = new Date(viewYear, viewMonth + dir, 1);
+    setViewMonth(next.getMonth());
+    setViewYear(next.getFullYear());
+  };
+
   const goToday = () => {
     const d = new Date();
     setNow(d);
@@ -354,352 +75,587 @@ export default function MultiCalendar() {
     setViewYear(d.getFullYear());
   };
 
-  const changeMonth = (direction: number) => {
-    const next = new Date(viewYear, viewMonth + direction, 1);
-    setViewMonth(next.getMonth());
-    setViewYear(next.getFullYear());
+  const handleDatePick = (date: Date) => {
+    setSelectedDate(date);
+    setViewMonth(date.getMonth());
+    setViewYear(date.getFullYear());
   };
 
-  const handlePickDate = (value: string) => {
-    if (!value) return;
-
-    const [y, m, d] = value.split("-").map(Number);
-    const picked = new Date(y, m - 1, d);
-
-    setSelectedDate(picked);
-    setViewMonth(picked.getMonth());
-    setViewYear(picked.getFullYear());
+  // ✅ Open modal when date is clicked
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const handleDateClick = (date: Date, inMonth: boolean) => {
+    setModalDate(date);
+    setModalOpen(true);
   };
+
+  const selectedBn = useMemo(() => toBanglaDate(selectedDate), [selectedDate]);
+  const selectedHijri = useMemo(
+    () => toHijriDate(selectedDate),
+    [selectedDate],
+  );
+
+  const modalBn = useMemo(
+    () => (modalDate ? toBanglaDate(modalDate) : null),
+    [modalDate],
+  );
+  const modalHijri = useMemo(
+    () => (modalDate ? toHijriDate(modalDate) : null),
+    [modalDate],
+  );
+
+  const bnMonthsInView = useMemo(() => {
+    const months = new Set(
+      cells.filter((c) => c.inMonth).map((c) => c.bn.month),
+    );
+    return Array.from(months).map((m) => BN_MONTHS[m]);
+  }, [cells]);
+
+  const hijriMonthsInView = useMemo(() => {
+    const months = new Set(
+      cells.filter((c) => c.inMonth).map((c) => c.hijri.month),
+    );
+    return Array.from(months).map((m) => HIJRI_MONTHS[m]);
+  }, [cells]);
 
   return (
-    <div className="min-h-screen bg-(--color-bg) p-4 text-(--color-text) transition-colors duration-300 sm:p-6 lg:p-8">
-      <div className="mx-auto max-w-7xl space-y-5">
-        {/* Top Card */}
-        <div className="relative overflow-hidden rounded-3xl border border-(--color-active-border) bg-(--color-bg) p-5 sm:p-6">
-          <div className="absolute left-0 right-0 top-0 h-1 bg-(--color-active-text)" />
-
-          <p className="text-[11px] uppercase tracking-[0.2em] text-(--color-gray)">
-            Zero Loading Multi Calendar
-          </p>
-
-          <h1 className="mt-2 text-2xl font-black text-(--color-text) sm:text-3xl">
-            English · Bangla · Hijri
-          </h1>
-
-          <p className="mt-2 text-sm text-(--color-gray)">
-            Instant local calculation. No API, no loading. Local time:{" "}
-            <span className="font-semibold text-(--color-text)">
-              {currentTime}
-            </span>
-          </p>
-
-          <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-2xl border border-(--color-active-border) bg-(--color-active-bg) px-4 py-3">
-              <p className="text-[11px] uppercase tracking-[0.14em] text-(--color-gray)">
-                Day
-              </p>
-              <p className="text-lg font-bold text-(--color-text) sm:text-xl">
-                {EN_DAYS[today.getDay()]}
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-(--color-active-border) bg-(--color-active-bg) px-4 py-3">
-              <p className="text-[11px] uppercase tracking-[0.14em] text-(--color-gray)">
-                English
-              </p>
-              <p className="text-base font-bold text-(--color-text) sm:text-lg">
-                {formatEnglish(today)}
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-(--color-active-border) bg-(--color-active-bg) px-4 py-3">
-              <p className="text-[11px] uppercase tracking-[0.14em] text-(--color-gray)">
-                Bangla
-              </p>
-              <p className="text-base font-bold text-(--color-text) sm:text-lg">
-                {todayBn.day} {BN_MONTHS[todayBn.month]} {todayBn.year} BS
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-(--color-active-border) bg-(--color-active-bg) px-4 py-3">
-              <p className="text-[11px] uppercase tracking-[0.14em] text-(--color-gray)">
-                Hijri
-              </p>
-              <p className="text-base font-bold text-(--color-text) sm:text-lg">
-                {todayHijri.day} {HIJRI_MONTHS[todayHijri.month]}{" "}
-                {todayHijri.year} AH
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.5fr_0.78fr]">
-          {/* Main Calendar */}
-          <div className="relative overflow-hidden rounded-3xl border border-(--color-active-border) bg-(--color-bg)">
-            <div className="absolute left-0 right-0 top-0 h-1 bg-(--color-active-text)" />
+    <div className="min-h-screen bg-(--color-bg) text-(--color-text) transition-colors duration-300">
+      <div className="mx-auto max-w-6xl px-3 py-4 sm:px-5 sm:py-6 space-y-4">
+        {/* ── Calendar + Side Panel ── */}
+        <div className="grid grid-cols-1 xl:grid-cols-[1fr_280px] gap-4">
+          {/* ── Main Calendar Panel ── */}
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.05 }}
+            className="relative overflow-hidden rounded-2xl border border-(--color-active-border) bg-(--color-bg)"
+          >
+            <div className="absolute inset-x-0 top-0 h-0.5 bg-(--color-active-text)" />
 
             {/* Toolbar */}
-            <div className="space-y-4 border-b border-(--color-active-border) p-4 sm:p-5">
-              <div className="flex flex-wrap items-end gap-2">
-                <button
+            <div className="px-3 py-3 sm:px-4 sm:py-4 border-b border-(--color-active-border) space-y-3">
+              <div className="flex items-center gap-2">
+                <motion.button
+                  whileTap={{ scale: 0.9 }}
                   type="button"
-                  aria-label="Previous month"
                   onClick={() => changeMonth(-1)}
-                  className="h-11 w-11 shrink-0 rounded-2xl border border-(--color-active-border) bg-(--color-active-bg) text-xl leading-none text-(--color-text) transition-colors hover:opacity-90"
+                  className="w-9 h-9 flex items-center justify-center rounded-xl border border-(--color-active-border) bg-(--color-active-bg) text-(--color-text) hover:opacity-80 transition-opacity shrink-0"
                 >
-                  ‹
-                </button>
+                  <ChevronLeft size={16} />
+                </motion.button>
 
-                <SelectOption
-                  label="Month"
-                  options={MONTH_OPTIONS}
-                  value={String(viewMonth)}
-                  onChange={(value) => setViewMonth(Number(value))}
-                  className="min-w-45 flex-1"
-                />
+                <div className="flex-1 text-center">
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={`${viewYear}-${viewMonth}`}
+                      initial={{ opacity: 0, x: slideDir * 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -slideDir * 20 }}
+                      transition={{ duration: 0.18 }}
+                    >
+                      <p className="text-lg sm:text-xl font-black text-(--color-text) leading-none">
+                        {EN_MONTHS[viewMonth]} {viewYear}
+                      </p>
+                      <p className="mt-1 text-[10px] text-(--color-gray) flex items-center justify-center gap-2 flex-wrap">
+                        <span style={{ color: "var(--cal-bn)" }}>
+                          {bnMonthsInView.join(" / ")}
+                        </span>
+                        <span className="text-(--color-active-border)">·</span>
+                        <span style={{ color: "var(--cal-hj)" }}>
+                          {hijriMonthsInView.join(" / ")}
+                        </span>
+                      </p>
+                    </motion.div>
+                  </AnimatePresence>
+                </div>
 
-                <SelectOption
-                  label="Year"
-                  options={YEAR_OPTIONS}
-                  value={String(viewYear)}
-                  onChange={(value) => setViewYear(Number(value))}
-                  className="w-full sm:w-35"
-                />
-
-                <button
+                <motion.button
+                  whileTap={{ scale: 0.9 }}
                   type="button"
-                  aria-label="Next month"
                   onClick={() => changeMonth(1)}
-                  className="h-11 w-11 shrink-0 rounded-2xl border border-(--color-active-border) bg-(--color-active-bg) text-xl leading-none text-(--color-text) transition-colors hover:opacity-90"
+                  className="w-9 h-9 flex items-center justify-center rounded-xl border border-(--color-active-border) bg-(--color-active-bg) text-(--color-text) hover:opacity-80 transition-opacity shrink-0"
                 >
-                  ›
-                </button>
+                  <ChevronRight size={16} />
+                </motion.button>
               </div>
 
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-                <button
+              <div className="flex items-center justify-between gap-2">
+                <motion.button
+                  whileTap={{ scale: 0.95 }}
                   type="button"
                   onClick={goToday}
-                  className="h-11 rounded-2xl border border-(--color-active-border) bg-(--color-active-bg) px-4 text-sm font-medium text-(--color-text) transition-colors hover:opacity-90"
+                  className="h-9 px-3 rounded-xl border border-(--color-active-border) bg-(--color-active-bg) text-xs font-semibold text-(--color-text) hover:opacity-80 transition-opacity flex items-center gap-1.5"
                 >
-                  Back to Today
-                </button>
+                  <RotateCcw size={12} /> Today
+                </motion.button>
 
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[11px] uppercase tracking-[0.14em] text-(--color-gray)">
-                    Pick exact date
-                  </label>
-                  <input
-                    type="date"
-                    value={toInputValue(selectedDate)}
-                    onChange={(e) => handlePickDate(e.target.value)}
-                    className="h-11 rounded-2xl border border-(--color-active-border) bg-(--color-bg) px-3 text-(--color-text) outline-none"
-                  />
-                </div>
+                <DatePicker value={selectedDate} onChange={handleDatePick} />
               </div>
 
-              <div className="text-xs text-(--color-gray)">
-                Visible month approx:{" "}
-                <span className="font-medium text-(--color-text)">
-                  {BN_MONTHS[visibleMonthApproxBn.month]}{" "}
-                  {visibleMonthApproxBn.year} BS
-                </span>{" "}
-                ·{" "}
-                <span className="font-medium text-(--color-text)">
-                  {HIJRI_MONTHS[visibleMonthApproxHijri.month]}{" "}
-                  {visibleMonthApproxHijri.year} AH
-                </span>
+              {/* Color legend */}
+              <div className="flex items-center gap-3 flex-wrap text-[10px]">
+                <div className="flex items-center gap-1">
+                  <span className="w-2.5 h-2.5 rounded-full bg-(--color-text) opacity-70 shrink-0" />
+                  <span className="text-(--color-gray)">English</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span
+                    className="w-2.5 h-2.5 rounded-full shrink-0"
+                    style={{ backgroundColor: "var(--cal-bn)" }}
+                  />
+                  <span className="text-(--color-gray)">Bangla</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span
+                    className="w-2.5 h-2.5 rounded-full shrink-0"
+                    style={{ backgroundColor: "var(--cal-hj)" }}
+                  />
+                  <span className="text-(--color-gray)">Hijri</span>
+                </div>
               </div>
             </div>
 
             {/* Day headings */}
-            <div className="grid grid-cols-7 gap-2 px-3 pt-4 sm:px-5">
+            <div className="grid grid-cols-7 px-2 pt-3 pb-1 sm:px-3">
               {EN_DAYS_SHORT.map((day) => (
                 <div
                   key={day}
-                  className="pb-1 text-center text-[11px] font-semibold uppercase tracking-[0.14em] text-(--color-gray) sm:text-xs"
+                  className="text-center text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-(--color-gray)"
                 >
-                  {day}
+                  {day.slice(0, 2)}
                 </div>
               ))}
             </div>
 
-            {/* Calendar Grid */}
-            <div className="grid grid-cols-7 gap-2 p-3 sm:p-5">
-              {cells.map(({ date, inMonth, bn, hijri }, idx) => {
-                const isToday = sameDate(date, today);
-                const isSelected = sameDate(date, selectedDate);
+            {/* Calendar grid */}
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={`${viewYear}-${viewMonth}`}
+                initial={{ opacity: 0, x: slideDir * 30 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -slideDir * 30 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+                className="grid grid-cols-7 gap-1 p-2 sm:gap-1.5 sm:p-3"
+              >
+                {cells.map(({ date, inMonth, bn, hijri }, idx) => {
+                  const isToday = sameDate(date, today);
+                  const isSelected = sameDate(date, selectedDate);
+                  const showBnMonth = bn.day === 1;
+                  const showHijriMonth = hijri.day === 1;
 
-                const showEnMonth = date.getDate() === 1 || !inMonth;
-                const showBnMonth = bn.day === 1;
-                const showHijriMonth = hijri.day === 1;
+                  return (
+                    <motion.button
+                      key={idx}
+                      type="button"
+                      whileHover={inMonth ? { scale: 1.02 } : {}}
+                      whileTap={inMonth ? { scale: 0.95 } : {}}
+                      onClick={() => {
+                        handleDateClick(date, inMonth);
+                        setSelectedDate(date);
+                        if (!inMonth) {
+                          setViewMonth(date.getMonth());
+                          setViewYear(date.getFullYear());
+                        }
+                      }}
+                      className={`
+        relative rounded-xl p-1.5 sm:p-2 text-left transition-all min-h-18 sm:min-h-21 lg:min-h-22
+        flex flex-col justify-between cursor-pointer
+        ${
+          isSelected
+            ? "border border-(--color-active-text) bg-(--color-active-bg)"
+            : isToday
+              ? "border border-(--color-active-text)/50 bg-(--color-active-bg)/50"
+              : "border border-(--color-active-border)/60 hover:border-(--color-active-border) hover:bg-(--color-active-bg)/40"
+        }
+        ${!inMonth ? "opacity-30" : ""}
+      `}
+                    >
+                      {/* ✅ Top: Bangla Left */}
+                      <div className="flex justify-start">
+                        <p
+                          className="text-[8px] sm:text-[9px] leading-none font-bold"
+                          style={{
+                            color: isSelected
+                              ? "var(--cal-bn-sel, var(--cal-bn))"
+                              : "var(--cal-bn)",
+                          }}
+                        >
+                          {bn.day}
+                          {showBnMonth && (
+                            <span className="font-bold ml-0.5">
+                              {BN_MONTHS[bn.month].slice(0, 2)}
+                            </span>
+                          )}
+                        </p>
+                      </div>
 
-                return (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => {
-                      setSelectedDate(date);
-
-                      if (!inMonth) {
-                        setViewMonth(date.getMonth());
-                        setViewYear(date.getFullYear());
-                      }
-                    }}
-                    className={`min-h-24 rounded-2xl border p-2.5 text-left transition-all sm:min-h-28 sm:p-3 ${
-                      isSelected
-                        ? "border-(--color-active-text) bg-(--color-active-bg)"
-                        : "border-(--color-active-border) hover:bg-(--color-active-bg)"
-                    } ${!inMonth ? "opacity-45" : ""}`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <span
-                        className={`text-base font-black leading-none sm:text-lg ${
-                          isSelected
-                            ? "text-(--color-active-text)"
-                            : "text-(--color-text)"
-                        }`}
-                      >
-                        {date.getDate()}
-                      </span>
-
-                      {isToday && (
-                        <span className="rounded-full border border-(--color-active-border) bg-(--color-active-bg) px-1.5 py-0.5 text-[9px] font-semibold text-(--color-text)">
-                          Today
+                      {/* ✅ Middle: English BIG (CENTER) */}
+                      <div className="flex flex-col items-center justify-center py-0.5">
+                        <span
+                          className={`text-xl sm:text-2xl font-black leading-none ${
+                            isSelected
+                              ? "text-(--color-active-text)"
+                              : "text-(--color-text)"
+                          }`}
+                        >
+                          {date.getDate()}
                         </span>
-                      )}
-                    </div>
+                        {isToday && (
+                          <span className="text-[6px] font-bold mt-1 text-(--color-active-text)">
+                            ●
+                          </span>
+                        )}
+                      </div>
 
-                    <div className="mt-2 space-y-1">
-                      <p
-                        className={`text-[10px] leading-none sm:text-[11px] ${
-                          isSelected
-                            ? "text-(--color-active-text)"
-                            : "text-(--color-gray)"
-                        }`}
-                      >
-                        <span className="font-semibold">EN:</span>{" "}
-                        {date.getDate()}
-                        {showEnMonth
-                          ? ` ${EN_MONTHS_SHORT[date.getMonth()]}`
-                          : ""}
-                      </p>
+                      {/* ✅ Bottom: Hijri Right */}
+                      <div className="flex justify-end">
+                        <p
+                          className="text-[8px] sm:text-[9px] leading-none font-bold text-right"
+                          style={{
+                            color: isSelected
+                              ? "var(--cal-hj-sel, var(--cal-hj))"
+                              : "var(--cal-hj)",
+                          }}
+                        >
+                          {hijri.day}
+                          {showHijriMonth && (
+                            <span className="font-bold ml-0.5">
+                              {HIJRI_MONTHS[hijri.month].slice(0, 2)}
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                    </motion.button>
+                  );
+                })}
+              </motion.div>
+            </AnimatePresence>
+          </motion.div>
 
-                      <p
-                        className={`text-[10px] leading-none sm:text-[11px] ${
-                          isSelected
-                            ? "text-(--color-active-text)"
-                            : "text-(--color-gray)"
-                        }`}
-                      >
-                        <span className="font-semibold">BN:</span> {bn.day}
-                        {showBnMonth ? ` ${BN_MONTHS_SHORT[bn.month]}` : ""}
-                      </p>
+          {/* ── Right Panel ── */}
+          <motion.div
+            initial={{ opacity: 0, x: 12 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.1 }}
+            className="space-y-3"
+          >
+            {/* Selected date card */}
+            <div className="relative overflow-hidden rounded-2xl border border-(--color-active-border) bg-(--color-bg) p-4 sm:p-5">
+              <div className="absolute inset-x-0 top-0 h-0.5 bg-(--color-active-text)" />
 
-                      <p
-                        className={`text-[10px] leading-none sm:text-[11px] ${
-                          isSelected
-                            ? "text-(--color-active-text)"
-                            : "text-(--color-gray)"
-                        }`}
-                      >
-                        <span className="font-semibold">HJ:</span> {hijri.day}
-                        {showHijriMonth
-                          ? ` ${HIJRI_MONTHS_SHORT[hijri.month]}`
-                          : ""}
-                      </p>
-                    </div>
-                  </button>
-                );
-              })}
+              <p className="text-[10px] uppercase tracking-[0.2em] text-(--color-gray)">
+                Selected
+              </p>
+
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={selectedDate.toDateString()}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.15 }}
+                >
+                  <p className="mt-2 text-2xl sm:text-3xl font-black text-(--color-text) leading-none">
+                    {
+                      ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][
+                        selectedDate.getDay()
+                      ]
+                    }
+                  </p>
+
+                  {/* English */}
+                  <div className="mt-3 rounded-xl border border-(--color-active-border) bg-(--color-active-bg) p-3">
+                    <p className="text-[10px] uppercase tracking-widest text-(--color-gray)">
+                      English
+                    </p>
+                    <p className="mt-1 text-base font-bold text-(--color-text)">
+                      {selectedDate.getDate()}
+                      {ordSuffix(selectedDate.getDate())}{" "}
+                      {EN_MONTHS[selectedDate.getMonth()]}{" "}
+                      {selectedDate.getFullYear()}
+                    </p>
+                  </div>
+
+                  {/* Bangla */}
+                  <div
+                    className="mt-2 rounded-xl border p-3"
+                    style={{
+                      borderColor: "var(--cal-bn)",
+                      background: "var(--cal-bn-bg, transparent)",
+                    }}
+                  >
+                    <p
+                      className="text-[10px] uppercase tracking-widest"
+                      style={{ color: "var(--cal-bn)", opacity: 0.7 }}
+                    >
+                      Bangla
+                    </p>
+                    <p
+                      className="mt-1 text-base font-bold"
+                      style={{ color: "var(--cal-bn)" }}
+                    >
+                      {selectedBn.day} {BN_MONTHS[selectedBn.month]}{" "}
+                      {selectedBn.year} BS
+                    </p>
+                    <p
+                      className="mt-0.5 text-xs"
+                      style={{ color: "var(--cal-bn)", opacity: 0.7 }}
+                    >
+                      {BN_SEASON_ICONS[selectedBn.month]}{" "}
+                      {BN_SEASONS[selectedBn.month]}
+                    </p>
+                  </div>
+
+                  {/* Hijri */}
+                  <div
+                    className="mt-2 rounded-xl border p-3"
+                    style={{
+                      borderColor: "var(--cal-hj)",
+                      background: "var(--cal-hj-bg, transparent)",
+                    }}
+                  >
+                    <p
+                      className="text-[10px] uppercase tracking-widest"
+                      style={{ color: "var(--cal-hj)", opacity: 0.7 }}
+                    >
+                      Hijri
+                    </p>
+                    <p
+                      className="mt-1 text-base font-bold"
+                      style={{ color: "var(--cal-hj)" }}
+                    >
+                      {selectedHijri.day} {HIJRI_MONTHS[selectedHijri.month]}{" "}
+                      {selectedHijri.year} AH
+                    </p>
+                  </div>
+                </motion.div>
+              </AnimatePresence>
             </div>
-          </div>
 
-          {/* Right Panel */}
-          <div className="space-y-5">
-            <div className="relative overflow-hidden rounded-3xl border border-(--color-active-border) bg-(--color-bg) p-5 sm:p-6">
-              <div className="absolute left-0 right-0 top-0 h-1 bg-(--color-active-text)" />
-
-              <p className="text-[11px] uppercase tracking-[0.18em] text-(--color-gray)">
-                Selected Date
+            {/* Legend */}
+            <div className="rounded-2xl border border-(--color-active-border) bg-(--color-bg) p-4">
+              <p className="text-[10px] uppercase tracking-widest text-(--color-gray) mb-3">
+                Color Key
               </p>
-
-              <p className="mt-3 text-3xl font-black leading-none text-(--color-text) sm:text-4xl">
-                {EN_DAYS[selectedDate.getDay()]}
-              </p>
-
-              <p className="mt-2 text-sm text-(--color-gray)">
-                Full date details for the selected day.
-              </p>
-
-              <div className="mt-5 space-y-3">
-                <div className="rounded-2xl border border-(--color-active-border) bg-(--color-active-bg) p-4">
-                  <p className="text-[11px] uppercase tracking-[0.14em] text-(--color-gray)">
-                    English
-                  </p>
-                  <p className="mt-1 text-lg font-bold text-(--color-text)">
-                    {formatEnglish(selectedDate)}
-                  </p>
-                </div>
-
-                <div className="rounded-2xl border border-(--color-active-border) bg-(--color-active-bg) p-4">
-                  <p className="text-[11px] uppercase tracking-[0.14em] text-(--color-gray)">
-                    Bangla
-                  </p>
-                  <p className="mt-1 text-lg font-bold text-(--color-text)">
-                    {selectedBn.day} {BN_MONTHS[selectedBn.month]}{" "}
-                    {selectedBn.year} BS
-                  </p>
-                  <p className="mt-1 text-sm text-(--color-gray)">
-                    {BN_SEASON_ICONS[selectedBn.month]} Season:{" "}
-                    {BN_SEASONS[selectedBn.month]}
-                  </p>
-                </div>
-
-                <div className="rounded-2xl border border-(--color-active-border) bg-(--color-active-bg) p-4">
-                  <p className="text-[11px] uppercase tracking-[0.14em] text-(--color-gray)">
-                    Hijri
-                  </p>
-                  <p className="mt-1 text-lg font-bold text-(--color-text)">
-                    {selectedHijri.day} {HIJRI_MONTHS[selectedHijri.month]}{" "}
-                    {selectedHijri.year} AH
-                  </p>
-                </div>
+              <div className="space-y-2">
+                {[
+                  {
+                    color: "text-(--color-text)",
+                    label: "English date",
+                    desc: "Main focus, large",
+                  },
+                  {
+                    color: "[color:var(--cal-bn)]",
+                    label: "Bangla date",
+                    desc: "Month shown on day 1",
+                  },
+                  {
+                    color: "[color:var(--cal-hj)]",
+                    label: "Hijri date",
+                    desc: "Month shown on day 1",
+                  },
+                ].map(({ color, label, desc }) => (
+                  <div key={label} className="flex items-center gap-2">
+                    <span
+                      className={`text-sm font-black ${color} shrink-0 w-5`}
+                    >
+                      28
+                    </span>
+                    <div>
+                      <p className="text-xs font-semibold text-(--color-text)">
+                        {label}
+                      </p>
+                      <p className="text-[10px] text-(--color-gray)">{desc}</p>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
-
-            <div className="rounded-3xl border border-(--color-active-border) bg-(--color-bg) p-5 sm:p-6">
-              <p className="text-[11px] uppercase tracking-[0.18em] text-(--color-gray)">
-                Quick Guide
-              </p>
-
-              <div className="mt-4 space-y-3 text-sm text-(--color-gray)">
-                <p>
-                  <span className="font-semibold text-(--color-text)">EN</span>{" "}
-                  = English date
-                </p>
-                <p>
-                  <span className="font-semibold text-(--color-text)">BN</span>{" "}
-                  = Bangla date
-                </p>
-                <p>
-                  <span className="font-semibold text-(--color-text)">HJ</span>{" "}
-                  = Hijri date
-                </p>
-                <p>
-                  When Bangla or Hijri day becomes{" "}
-                  <span className="font-semibold text-(--color-text)">1</span>,
-                  the short month name appears beside it.
-                </p>
-                <p>
-                  Everything is calculated locally in the browser, so it opens
-                  instantly with zero loading state.
-                </p>
-              </div>
-            </div>
-          </div>
+          </motion.div>
         </div>
       </div>
+
+      {/* ✅ MODAL */}
+      <AnimatePresence>
+        {modalOpen && modalDate && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setModalOpen(false)}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
+            />
+
+            {/* Modal */}
+            {/* Modal */}
+            {/* Modal - 3 Column Layout */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            >
+              <div className="relative w-full max-w-2xl rounded-2xl border border-(--color-active-border) bg-(--color-bg) overflow-hidden shadow-2xl">
+                {/* Top accent */}
+                <div className="absolute inset-x-0 top-0 h-1 bg-(--color-active-text)" />
+
+                {/* Close button */}
+                <motion.button
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => setModalOpen(false)}
+                  className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-lg bg-(--color-active-bg) border border-(--color-active-border) text-(--color-text) hover:opacity-70 transition-opacity z-10"
+                >
+                  <X size={16} />
+                </motion.button>
+
+                {/* Content */}
+                <div className="p-5 sm:p-6">
+                  {/* Title */}
+                  <p className="text-[10px] uppercase tracking-[0.2em] text-(--color-gray) font-bold">
+                    Selected Date Details
+                  </p>
+
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={modalDate.toDateString()}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      {/* Three Column Layout */}
+                      <div className="mt-4 grid grid-cols-3 gap-4">
+                        {/* LEFT: Bangla */}
+                        {modalBn && (
+                          <div
+                            className="rounded-xl border p-4 flex flex-col items-center text-center space-y-2"
+                            style={{
+                              borderColor: "var(--cal-bn)",
+                              background: "var(--cal-bn-bg, rgba(0,0,0,0.02))",
+                            }}
+                          >
+                            <p
+                              className="text-[9px] uppercase tracking-widest font-bold"
+                              style={{ color: "var(--cal-bn)" }}
+                            >
+                              Bangla
+                            </p>
+                            <p
+                              className="text-3xl sm:text-4xl font-black leading-none"
+                              style={{ color: "var(--cal-bn)" }}
+                            >
+                              {modalBn.day}
+                            </p>
+                            <p
+                              className="text-xs font-bold"
+                              style={{ color: "var(--cal-bn)", opacity: 0.85 }}
+                            >
+                              {BN_MONTHS[modalBn.month]}
+                            </p>
+                            <p
+                              className="text-[9px]"
+                              style={{ color: "var(--cal-bn)", opacity: 0.7 }}
+                            >
+                              {modalBn.year} BS
+                            </p>
+                            <p
+                              className="text-sm pt-1"
+                              style={{ color: "var(--cal-bn)" }}
+                            >
+                              {BN_SEASON_ICONS[modalBn.month]}{" "}
+                              {BN_SEASONS[modalBn.month]}
+                            </p>
+                          </div>
+                        )}
+
+                        {/* CENTER: English (BIG) */}
+                        <div className="rounded-xl border border-(--color-active-border) bg-(--color-active-bg) p-4 flex flex-col items-center justify-center text-center space-y-1">
+                          <p className="text-[9px] uppercase tracking-widest text-(--color-gray) font-bold">
+                            English
+                          </p>
+                          <p className="text-5xl sm:text-6xl font-black text-(--color-text) leading-none">
+                            {modalDate.getDate()}
+                          </p>
+                          <p className="text-sm font-bold text-(--color-text)">
+                            {EN_MONTHS[modalDate.getMonth()]}
+                          </p>
+                          <p className="text-[10px] text-(--color-gray)">
+                            {modalDate.getFullYear()}
+                          </p>
+                          <div className="pt-2 border-t border-(--color-active-border) w-full">
+                            <p className="text-xs font-semibold text-(--color-text) pt-2">
+                              {
+                                [
+                                  "Sunday",
+                                  "Monday",
+                                  "Tuesday",
+                                  "Wednesday",
+                                  "Thursday",
+                                  "Friday",
+                                  "Saturday",
+                                ][modalDate.getDay()]
+                              }
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* RIGHT: Hijri */}
+                        {modalHijri && (
+                          <div
+                            className="rounded-xl border p-4 flex flex-col items-center text-center space-y-2"
+                            style={{
+                              borderColor: "var(--cal-hj)",
+                              background: "var(--cal-hj-bg, rgba(0,0,0,0.02))",
+                            }}
+                          >
+                            <p
+                              className="text-[9px] uppercase tracking-widest font-bold"
+                              style={{ color: "var(--cal-hj)" }}
+                            >
+                              Hijri
+                            </p>
+                            <p
+                              className="text-3xl sm:text-4xl font-black leading-none"
+                              style={{ color: "var(--cal-hj)" }}
+                            >
+                              {modalHijri.day}
+                            </p>
+                            <p
+                              className="text-xs font-bold"
+                              style={{ color: "var(--cal-hj)", opacity: 0.85 }}
+                            >
+                              {HIJRI_MONTHS[modalHijri.month]}
+                            </p>
+                            <p
+                              className="text-[9px]"
+                              style={{ color: "var(--cal-hj)", opacity: 0.7 }}
+                            >
+                              {modalHijri.year} AH
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </motion.div>
+                  </AnimatePresence>
+                </div>
+
+                {/* Footer */}
+                <div className="px-5 py-3 sm:px-6 border-t border-(--color-active-border) flex justify-end">
+                  <motion.button
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setModalOpen(false)}
+                    className="px-4 py-2 rounded-lg bg-red-500 text-white text-sm font-semibold hover:opacity-80 transition-opacity"
+                  >
+                    Close
+                  </motion.button>
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

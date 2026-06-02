@@ -24,6 +24,12 @@ ClassName=" text-(--color-text) hover:text-(--color-text-hover) bg-(--color-bg)"
   --color-active-border: rgba(15, 23, 42, 0.2);
   --color-active-bg: rgba(15, 23, 42, 0.1);
   --color-active-text: #13161c;
+
+  /* calender */
+  --cal-bn: #e8904a;
+  --cal-hj: #5eaad4;
+  --cal-bn-bg: rgba(232, 144, 74, 0.06);
+  --cal-hj-bg: rgba(94, 170, 212, 0.06);
 }
 
 /* ── Dark ── */
@@ -34,4 +40,10 @@ ClassName=" text-(--color-text) hover:text-(--color-text-hover) bg-(--color-bg)"
   --color-active-border: rgba(248, 249, 250, 0.2);
   --color-active-bg: rgba(248, 249, 250, 0.1);
   --color-active-text: #ffffff;
+
+  /* calender */
+  --cal-bn: #f0a868;
+  --cal-hj: #7cc4e8;
+  --cal-bn-bg: rgba(240, 168, 104, 0.08);
+  --cal-hj-bg: rgba(124, 196, 232, 0.08);
 }

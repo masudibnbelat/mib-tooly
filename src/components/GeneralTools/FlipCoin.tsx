@@ -2,17 +2,15 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { Coins, X } from "lucide-react";
+import { Coins, X, Edit2, Check } from "lucide-react";
 
 interface FlipCoinProps {
   onClose: () => void;
 }
 
-type CoinFace = "heads" | "tails" | null;
-
 type HistoryItem = {
   id: number;
-  value: "heads" | "tails";
+  value: string;
 };
 
 let sharedAudioCtx: AudioContext | null = null;
@@ -34,7 +32,6 @@ const getAudioCtx = (): AudioContext | null => {
 const playFlipSound = () => {
   const ctx = getAudioCtx();
   if (!ctx) return;
-
   try {
     const noise = ctx.createBufferSource();
     const buf = ctx.createBuffer(1, ctx.sampleRate * 0.3, ctx.sampleRate);
@@ -53,7 +50,6 @@ const playFlipSound = () => {
     noise.connect(bandpass).connect(noiseGain).connect(ctx.destination);
     noise.start();
     noise.stop(ctx.currentTime + 0.3);
-
     [0.05, 0.12, 0.2, 0.28, 0.38, 0.5, 0.65, 0.85].forEach((t, i) => {
       const osc = ctx.createOscillator();
       const g = ctx.createGain();
@@ -74,7 +70,6 @@ const playFlipSound = () => {
 const playLandSound = () => {
   const ctx = getAudioCtx();
   if (!ctx) return;
-
   try {
     const osc = ctx.createOscillator();
     const g = ctx.createGain();
@@ -86,7 +81,6 @@ const playLandSound = () => {
     osc.connect(g).connect(ctx.destination);
     osc.start();
     osc.stop(ctx.currentTime + 0.18);
-
     [0.08, 0.14].forEach((t) => {
       const o = ctx.createOscillator();
       const gg = ctx.createGain();
@@ -103,8 +97,18 @@ const playLandSound = () => {
   }
 };
 
+const truncateLabel = (label: string, max = 8) =>
+  label.length > max ? label.slice(0, max - 1) + "…" : label;
+
+const DEFAULT_SIDES = ["Heads", "Tails"];
+
 const FlipCoinModal = ({ onClose }: FlipCoinProps) => {
-  const [result, setResult] = useState<CoinFace>(null);
+  const [sides, setSides] = useState<string[]>(DEFAULT_SIDES);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const [showEditor, setShowEditor] = useState(false);
+
+  const [result, setResult] = useState<string | null>(null);
   const [isFlipping, setIsFlipping] = useState(false);
   const [flipCount, setFlipCount] = useState(0);
   const [history, setHistory] = useState<HistoryItem[]>([]);
@@ -115,15 +119,18 @@ const FlipCoinModal = ({ onClose }: FlipCoinProps) => {
   const landedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isFlippingRef = useRef(false);
   const nextIdRef = useRef(1);
+  const editInputRef = useRef<HTMLInputElement>(null);
 
-  const headsCount = history.filter((h) => h.value === "heads").length;
-  const tailsCount = history.length - headsCount;
+  const sideCounts = sides.map(
+    (s) => history.filter((h) => h.value === s).length,
+  );
 
   const flip = useCallback(() => {
     if (isFlippingRef.current) return;
     isFlippingRef.current = true;
 
-    const outcome: "heads" | "tails" = Math.random() < 0.5 ? "heads" : "tails";
+    const outcomeIndex = Math.floor(Math.random() * 2);
+    const outcome = sides[outcomeIndex];
     const extraTurns = 5 + Math.floor(Math.random() * 4);
 
     setIsFlipping(true);
@@ -134,7 +141,7 @@ const FlipCoinModal = ({ onClose }: FlipCoinProps) => {
 
     setSpinAngle((prev) => {
       const normalized = ((prev % 360) + 360) % 360;
-      const target = outcome === "heads" ? 0 : 180;
+      const target = outcomeIndex * 180;
       let delta = target - normalized;
       if (delta < 0) delta += 360;
       return prev + extraTurns * 360 + delta;
@@ -150,49 +157,50 @@ const FlipCoinModal = ({ onClose }: FlipCoinProps) => {
       isFlippingRef.current = false;
       setLanded(true);
       setFlipCount((c) => c + 1);
-
       const id = nextIdRef.current++;
       setHistory((h) => [{ id, value: outcome }, ...h].slice(0, 30));
-
-      landedTimeoutRef.current = setTimeout(() => {
-        setLanded(false);
-      }, 500);
+      landedTimeoutRef.current = setTimeout(() => setLanded(false), 500);
     }, 1500);
-  }, []);
+  }, [sides]);
 
-  // Lock body scroll completely
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSpinAngle(0);
+    setResult(null);
+    setLanded(false);
+  }, [sides]);
+
   useEffect(() => {
     const scrollY = window.scrollY;
     const prevBodyStyle = document.body.style.cssText;
     const prevHtmlStyle = document.documentElement.style.cssText;
-
-    // Lock everything
     document.body.style.cssText = `
       overflow: hidden !important;
       position: fixed !important;
       top: -${scrollY}px;
-      left: 0;
-      right: 0;
-      width: 100%;
+      left: 0; right: 0; width: 100%;
       touch-action: none;
     `;
     document.documentElement.style.overflow = "hidden";
 
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-      if (e.key === " " || e.key === "Enter") {
+      if (e.key === "Escape") {
+        if (showEditor) setShowEditor(false);
+        else onClose();
+      }
+      if (
+        (e.key === " " || e.key === "Enter") &&
+        document.activeElement === document.body
+      ) {
         e.preventDefault();
         flip();
       }
     };
 
-    // Block touch scroll on background
     const preventScroll = (e: TouchEvent) => {
       const target = e.target as HTMLElement;
-      const modalContent = document.getElementById("flip-coin-modal-content");
-      if (modalContent && !modalContent.contains(target)) {
-        e.preventDefault();
-      }
+      const modal = document.getElementById("flip-coin-modal-content");
+      if (modal && !modal.contains(target)) e.preventDefault();
     };
 
     window.addEventListener("keydown", onKey);
@@ -204,52 +212,209 @@ const FlipCoinModal = ({ onClose }: FlipCoinProps) => {
       window.scrollTo(0, scrollY);
       window.removeEventListener("keydown", onKey);
       document.removeEventListener("touchmove", preventScroll);
-
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       if (landedTimeoutRef.current) clearTimeout(landedTimeoutRef.current);
       isFlippingRef.current = false;
     };
-  }, [onClose, flip]);
+  }, [onClose, flip, showEditor]);
+
+  const startEdit = (i: number) => {
+    setEditingIndex(i);
+    setEditValue(sides[i]);
+    setTimeout(() => editInputRef.current?.focus(), 50);
+  };
+
+  const commitEdit = (i: number) => {
+    const trimmed = editValue.trim();
+    if (trimmed && trimmed !== sides[i]) {
+      setSides((prev) => prev.map((s, idx) => (idx === i ? trimmed : s)));
+      setHistory((h) =>
+        h.map((item) =>
+          item.value === sides[i] ? { ...item, value: trimmed } : item,
+        ),
+      );
+    }
+    setEditingIndex(null);
+  };
+
+  const resetToDefault = () => {
+    setSides(DEFAULT_SIDES);
+    setHistory([]);
+    setFlipCount(0);
+    setResult(null);
+    setSpinAngle(0);
+    setLanded(false);
+  };
 
   return (
     <motion.div
-      className="fixed inset-0 z-[200000000] h-[100dvh] w-[100vw] bg-black/60 backdrop-blur-md"
+      className="fixed inset-0 z-200000000 h-dvh w-screen bg-black/60 backdrop-blur-md"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
+      transition={{ duration: 0.15 }}
     >
       <motion.div
         id="flip-coin-modal-content"
-        className="flex h-[100dvh] w-[100vw] flex-col overflow-y-auto overflow-x-hidden overscroll-contain bg-[var(--color-bg)]"
-        initial={{ y: 40, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        exit={{ y: 40, opacity: 0 }}
-        transition={{ type: "spring", stiffness: 300, damping: 28 }}
+        className="flex h-dvh w-screen flex-col overflow-y-auto overflow-x-hidden overscroll-contain bg-(--color-bg)"
+        initial={{ scale: 0.96, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.96, opacity: 0 }}
+        transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
       >
-        {/* Close */}
-        <div className="sticky top-0 z-10 flex w-full shrink-0 items-center justify-between px-5 pt-5 pb-2">
+        {/* Header */}
+        <div className="sticky top-0 z-10 flex w-full shrink-0 items-center justify-between px-5 pt-5 pb-3 bg-(--color-bg)/80 backdrop-blur-xl">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--color-active-bg)]">
-              <Coins className="h-5 w-5 text-[var(--color-text)]" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-(--color-active-bg)">
+              <Coins className="h-5 w-5 text-(--color-text)" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-[var(--color-text)]">
+              <h2 className="text-lg font-semibold text-(--color-text)">
                 Flip a Coin
               </h2>
-              <p className="text-xs text-[var(--color-gray)]">
-                Tap the coin or press Space
-              </p>
+              <p className="text-xs text-(--color-gray)">Touch coin to flip</p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-red-500 text-[var(--color-text)] transition-colors"
-            aria-label="Close"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Edit sides toggle */}
+            <motion.button
+              type="button"
+              whileTap={{ scale: 0.93 }}
+              onClick={() => setShowEditor((v) => !v)}
+              className="flex h-9 cursor-pointer items-center gap-2 rounded-full px-3.5 text-xs font-semibold transition-all"
+              style={{
+                border: "1.5px solid var(--color-active-border)",
+                backgroundColor: showEditor
+                  ? "var(--color-text)"
+                  : "var(--color-active-bg)",
+                color: showEditor ? "var(--color-bg)" : "var(--color-text)",
+              }}
+            >
+              {showEditor ? (
+                <>
+                  <Check className="h-3.5 w-3.5" />
+                  Done
+                </>
+              ) : (
+                <>
+                  <Edit2 className="h-3.5 w-3.5" />
+                  Edit Sides
+                </>
+              )}
+            </motion.button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-red-500 text-white transition-transform hover:scale-105 active:scale-95"
+              aria-label="Close"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </div>
+
+        {/* Side editor panel - Only 2 sides */}
+        <AnimatePresence mode="wait">
+          {showEditor && (
+            <motion.div
+              key="editor"
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+              className="w-full px-5 pb-4"
+            >
+              <div
+                className="w-full rounded-2xl p-4 shadow-lg"
+                style={{
+                  border: "1.5px solid var(--color-active-border)",
+                  backgroundColor: "var(--color-active-bg)",
+                }}
+              >
+                <div className="mb-4 flex items-center justify-between">
+                  <div>
+                    <span className="text-sm font-bold text-(--color-text)">
+                      Customize Coin Sides
+                    </span>
+                    <p className="text-xs text-(--color-gray) mt-0.5">
+                      Edit the labels for both sides
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={resetToDefault}
+                    className="cursor-pointer rounded-lg px-3 py-1.5 text-xs font-medium text-(--color-gray) transition-all hover:bg-(--color-bg)"
+                  >
+                    Reset
+                  </button>
+                </div>
+
+                {/* Side list - Fixed 2 sides */}
+                <div className="space-y-2">
+                  {sides.map((side, i) => (
+                    <motion.div
+                      key={`side-${i}`}
+                      layout
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.05 }}
+                      className="flex items-center gap-2"
+                    >
+                      <div
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold text-(--color-text)"
+                        style={{
+                          border: "1.5px solid var(--color-active-border)",
+                          backgroundColor: "var(--color-bg)",
+                        }}
+                      >
+                        {i + 1}
+                      </div>
+                      {editingIndex === i ? (
+                        <div className="flex flex-1 items-center gap-2">
+                          <input
+                            ref={editInputRef}
+                            value={editValue}
+                            onChange={(e) => setEditValue(e.target.value)}
+                            onBlur={() => commitEdit(i)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") commitEdit(i);
+                              if (e.key === "Escape") setEditingIndex(null);
+                            }}
+                            maxLength={20}
+                            className="h-9 flex-1 rounded-lg bg-(--color-bg) px-3 text-sm font-medium text-(--color-text) outline-none ring-2 ring-(--color-text)"
+                            style={{
+                              border: "1.5px solid var(--color-text)",
+                            }}
+                            autoFocus
+                          />
+                          <motion.button
+                            type="button"
+                            whileTap={{ scale: 0.9 }}
+                            onClick={() => commitEdit(i)}
+                            className="flex h-9 w-9 items-center justify-center rounded-lg bg-(--color-text) text-(--color-bg)"
+                          >
+                            <Check className="h-4 w-4" />
+                          </motion.button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => startEdit(i)}
+                          className="h-9 flex-1 cursor-text rounded-lg px-3 text-left text-sm font-medium text-(--color-text) transition-all hover:bg-(--color-bg)"
+                          style={{
+                            border: "1.5px solid var(--color-active-border)",
+                          }}
+                        >
+                          {side}
+                        </button>
+                      )}
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Coin area */}
         <div className="relative flex flex-1 flex-col items-center justify-center px-6 py-8">
@@ -258,9 +423,7 @@ const FlipCoinModal = ({ onClose }: FlipCoinProps) => {
             className="pointer-events-none absolute h-64 w-64 rounded-full blur-[100px]"
             animate={{
               background: result
-                ? result === "heads"
-                  ? "radial-gradient(circle, rgba(59,130,246,0.15) 0%, transparent 70%)"
-                  : "radial-gradient(circle, rgba(168,85,247,0.15) 0%, transparent 70%)"
+                ? "radial-gradient(circle, rgba(59,130,246,0.15) 0%, transparent 70%)"
                 : "radial-gradient(circle, rgba(128,128,128,0.08) 0%, transparent 70%)",
             }}
             transition={{ duration: 0.6 }}
@@ -294,7 +457,7 @@ const FlipCoinModal = ({ onClose }: FlipCoinProps) => {
                 onClick={flip}
                 disabled={isFlipping}
                 aria-label="Flip coin"
-                className="relative h-40 w-40 cursor-pointer select-none rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-text)]/30 disabled:cursor-not-allowed sm:h-52 sm:w-52"
+                className="relative h-40 w-40 cursor-pointer select-none rounded-full outline-none focus-visible:ring-2 focus-visible:ring-(--color-text)/30 disabled:cursor-not-allowed sm:h-52 sm:w-52"
                 style={{ transformStyle: "preserve-3d" }}
                 animate={{
                   rotateX: spinAngle,
@@ -324,81 +487,21 @@ const FlipCoinModal = ({ onClose }: FlipCoinProps) => {
                   />
                 ))}
 
-                {/* Heads face */}
-                <div
-                  className="absolute inset-0 rounded-full"
-                  style={{
-                    backfaceVisibility: "hidden",
-                    WebkitBackfaceVisibility: "hidden",
-                    transform: "translateZ(2px)",
-                  }}
-                >
-                  <div
-                    className="absolute inset-0 rounded-full"
-                    style={{
-                      border: "2px solid var(--color-active-border)",
-                      background:
-                        "linear-gradient(145deg, var(--color-bg) 0%, var(--color-active-bg) 50%, var(--color-bg) 100%)",
-                      boxShadow:
-                        "inset 0 6px 24px rgba(255,255,255,0.25), inset 0 -8px 20px rgba(0,0,0,0.1), 0 20px 50px rgba(0,0,0,0.2)",
-                    }}
-                  />
-                  <div
-                    className="absolute inset-2 rounded-full opacity-50"
-                    style={{ border: "1px solid var(--color-active-border)" }}
-                  />
-                  <div
-                    className="absolute inset-4 rounded-full opacity-25"
-                    style={{ border: "1px solid var(--color-active-border)" }}
-                  />
-                  <div className="absolute left-[15%] top-[10%] h-[35%] w-[35%] rounded-full bg-white/20 blur-2xl dark:bg-white/10" />
-                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-1">
-                    <span className="text-5xl font-black text-[var(--color-text)] sm:text-7xl">
-                      H
-                    </span>
-                    <span className="text-[9px] font-bold uppercase tracking-[0.35em] text-[var(--color-gray)] sm:text-[10px]">
-                      Heads
-                    </span>
-                  </div>
-                </div>
+                {/* Face 0 — front */}
+                <CoinFaceLayer
+                  label={sides[0] ?? ""}
+                  rotateX={0}
+                  gradient="linear-gradient(145deg, var(--color-bg) 0%, var(--color-active-bg) 50%, var(--color-bg) 100%)"
+                  highlightPos="left"
+                />
 
-                {/* Tails face */}
-                <div
-                  className="absolute inset-0 rounded-full"
-                  style={{
-                    backfaceVisibility: "hidden",
-                    WebkitBackfaceVisibility: "hidden",
-                    transform: "rotateX(180deg) translateZ(2px)",
-                  }}
-                >
-                  <div
-                    className="absolute inset-0 rounded-full"
-                    style={{
-                      border: "2px solid var(--color-active-border)",
-                      background:
-                        "linear-gradient(145deg, var(--color-active-bg) 0%, var(--color-bg) 50%, var(--color-active-bg) 100%)",
-                      boxShadow:
-                        "inset 0 6px 24px rgba(255,255,255,0.15), inset 0 -8px 20px rgba(0,0,0,0.12), 0 20px 50px rgba(0,0,0,0.2)",
-                    }}
-                  />
-                  <div
-                    className="absolute inset-2 rounded-full opacity-50"
-                    style={{ border: "1px solid var(--color-active-border)" }}
-                  />
-                  <div
-                    className="absolute inset-4 rounded-full opacity-25"
-                    style={{ border: "1px solid var(--color-active-border)" }}
-                  />
-                  <div className="absolute right-[15%] top-[10%] h-[30%] w-[30%] rounded-full bg-white/15 blur-2xl" />
-                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-1">
-                    <span className="text-5xl font-black text-[var(--color-text)] sm:text-7xl">
-                      T
-                    </span>
-                    <span className="text-[9px] font-bold uppercase tracking-[0.35em] text-[var(--color-gray)] sm:text-[10px]">
-                      Tails
-                    </span>
-                  </div>
-                </div>
+                {/* Face 1 — back */}
+                <CoinFaceLayer
+                  label={sides[1] ?? ""}
+                  rotateX={180}
+                  gradient="linear-gradient(145deg, var(--color-active-bg) 0%, var(--color-bg) 50%, var(--color-active-bg) 100%)"
+                  highlightPos="right"
+                />
               </motion.button>
             </motion.div>
 
@@ -435,7 +538,7 @@ const FlipCoinModal = ({ onClose }: FlipCoinProps) => {
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -8 }}
-                  className="text-sm font-medium text-[var(--color-gray)]"
+                  className="text-sm font-medium text-(--color-gray)"
                 >
                   <motion.span
                     animate={{ opacity: [0.4, 1, 0.4] }}
@@ -454,14 +557,14 @@ const FlipCoinModal = ({ onClose }: FlipCoinProps) => {
                   className="flex flex-col items-center gap-1"
                 >
                   <motion.p
-                    className="text-3xl font-bold text-[var(--color-text)] sm:text-4xl"
+                    className="text-3xl font-bold text-(--color-text) sm:text-4xl"
                     initial={{ scale: 1.3 }}
                     animate={{ scale: 1 }}
                     transition={{ type: "spring", stiffness: 500, damping: 14 }}
                   >
-                    {result === "heads" ? "Heads!" : "Tails!"}
+                    {result}!
                   </motion.p>
-                  <p className="text-xs text-[var(--color-gray)]">
+                  <p className="text-xs text-(--color-gray)">
                     Flip #{flipCount}
                   </p>
                 </motion.div>
@@ -471,69 +574,42 @@ const FlipCoinModal = ({ onClose }: FlipCoinProps) => {
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -8 }}
-                  className="text-sm text-[var(--color-gray)]"
+                  className="text-sm text-(--color-gray)"
                 >
-                  Tap the coin to flip
+                  Touch the coin to flip
                 </motion.p>
               )}
             </AnimatePresence>
-
-            <motion.button
-              type="button"
-              onClick={flip}
-              disabled={isFlipping}
-              whileHover={{ scale: 1.04 }}
-              whileTap={{ scale: 0.96 }}
-              className="mt-1 inline-flex h-11 cursor-pointer items-center justify-center rounded-2xl px-8 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40"
-              style={{
-                border: "1px solid var(--color-active-border)",
-                backgroundColor: "var(--color-active-bg)",
-                color: "var(--color-text)",
-              }}
-            >
-              {isFlipping
-                ? "Flipping…"
-                : flipCount === 0
-                  ? "Flip Coin"
-                  : "Flip Again"}
-            </motion.button>
           </div>
         </div>
 
-        {/* Bottom: history & stats */}
-        <div
-          className="w-full shrink-0 px-5 py-4"
-          style={{ borderTop: "1px solid var(--color-active-border)" }}
-        >
-          {history.length === 0 ? (
-            <p className="text-center text-xs text-[var(--color-gray)]">
-              Your flip history will appear here
-            </p>
-          ) : (
+        {/* Bottom: history & stats - Only show if history exists */}
+        {history.length > 0 && (
+          <div
+            className="w-full shrink-0 px-5 py-4"
+            style={{ borderTop: "1px solid var(--color-active-border)" }}
+          >
             <div className="space-y-3">
               {/* Stats */}
-              <div className="flex items-center justify-center gap-6 text-xs">
-                <span className="text-[var(--color-gray)]">
-                  <span
-                    className="font-semibold"
-                    style={{ color: "var(--color-text)" }}
-                  >
-                    {headsCount}
-                  </span>{" "}
-                  Heads
-                </span>
-                <span style={{ color: "var(--color-active-border)" }}>•</span>
-                <span className="text-[var(--color-gray)]">
-                  <span
-                    className="font-semibold"
-                    style={{ color: "var(--color-text)" }}
-                  >
-                    {tailsCount}
-                  </span>{" "}
-                  Tails
-                </span>
-                <span style={{ color: "var(--color-active-border)" }}>•</span>
-                <span className="text-[var(--color-gray)]">
+              <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1 text-xs">
+                {sides.map((side, i) => (
+                  <span key={side} className="text-(--color-gray)">
+                    <span
+                      className="font-semibold"
+                      style={{ color: "var(--color-text)" }}
+                    >
+                      {sideCounts[i]}
+                    </span>{" "}
+                    {side}
+                  </span>
+                ))}
+                <span
+                  className="text-(--color-gray)"
+                  style={{
+                    borderLeft: "1px solid var(--color-active-border)",
+                    paddingLeft: "1.25rem",
+                  }}
+                >
                   <span
                     className="font-semibold"
                     style={{ color: "var(--color-text)" }}
@@ -543,11 +619,95 @@ const FlipCoinModal = ({ onClose }: FlipCoinProps) => {
                   Total
                 </span>
               </div>
+
+              {/* Recent flips */}
+              <div className="flex flex-wrap gap-1.5">
+                {history.slice(0, 20).map((item) => (
+                  <motion.span
+                    key={item.id}
+                    layout
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ type: "spring", stiffness: 500, damping: 20 }}
+                    className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium text-(--color-text)"
+                    style={{
+                      border: "1px solid var(--color-active-border)",
+                      backgroundColor: "var(--color-active-bg)",
+                    }}
+                  >
+                    {item.value}
+                  </motion.span>
+                ))}
+              </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </motion.div>
     </motion.div>
+  );
+};
+
+// ─── Coin face sub-component ───────────────────────────────────────────────
+interface CoinFaceLayerProps {
+  label: string;
+  rotateX: number;
+  gradient: string;
+  highlightPos: "left" | "right";
+}
+
+const CoinFaceLayer = ({
+  label,
+  rotateX,
+  gradient,
+  highlightPos,
+}: CoinFaceLayerProps) => {
+  const short = truncateLabel(label, 9);
+  const fontSize =
+    short.length <= 2
+      ? "text-5xl sm:text-7xl"
+      : short.length <= 5
+        ? "text-3xl sm:text-4xl"
+        : "text-xl sm:text-2xl";
+
+  return (
+    <div
+      className="absolute inset-0 rounded-full"
+      style={{
+        backfaceVisibility: "hidden",
+        WebkitBackfaceVisibility: "hidden",
+        transform: `rotateX(${rotateX}deg) translateZ(2px)`,
+      }}
+    >
+      <div
+        className="absolute inset-0 rounded-full"
+        style={{
+          border: "2px solid var(--color-active-border)",
+          background: gradient,
+          boxShadow:
+            "inset 0 6px 24px rgba(255,255,255,0.22), inset 0 -8px 20px rgba(0,0,0,0.1), 0 20px 50px rgba(0,0,0,0.2)",
+        }}
+      />
+      <div
+        className="absolute inset-2 rounded-full opacity-50"
+        style={{ border: "1px solid var(--color-active-border)" }}
+      />
+      <div
+        className="absolute inset-4 rounded-full opacity-25"
+        style={{ border: "1px solid var(--color-active-border)" }}
+      />
+      {/* Highlight */}
+      <div
+        className={`absolute top-[10%] h-[32%] w-[32%] rounded-full bg-white/20 blur-2xl dark:bg-white/10 ${highlightPos === "left" ? "left-[14%]" : "right-[14%]"}`}
+      />
+      {/* Label */}
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 px-3">
+        <span
+          className={`${fontSize} font-black text-(--color-text) leading-none text-center`}
+        >
+          {short}
+        </span>
+      </div>
+    </div>
   );
 };
 
