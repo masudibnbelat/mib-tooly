@@ -2,7 +2,7 @@ import CalculatorTools from "@/src/components/CalculatorTools/CalculatorTools";
 
 const page = () => {
   return (
-    <div>
+    <div className="h-screen">
       <CalculatorTools />
     </div>
   );
